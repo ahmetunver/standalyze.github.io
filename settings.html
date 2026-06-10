@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <!-- ERİŞİM KORUMASI: yalnızca admin olarak giriş yapanlar görebilir -->
+  <script>
+    (function () {
+      if (sessionStorage.getItem('role') !== 'admin') {
+        window.location.replace('index.html');
+      }
+    })();
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Standalyze — Ayarlar</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; font-family: 'Plus Jakarta Sans', sans-serif; background: #F0EEF8; color: #1A1635; overflow: hidden; }
+    .app { display: flex; height: 100vh; }
+
+    /* ── SIDEBAR ── */
+    .sidebar { width: 240px; flex-shrink: 0; background: linear-gradient(180deg,#6B5FD4 0%,#5E78D0 100%); display: flex; flex-direction: column; position: relative; overflow: hidden; }
+    .sidebar::before { content:''; position:absolute; inset:0; background: radial-gradient(ellipse at 80% 10%,rgba(255,255,255,0.12) 0%,transparent 50%), radial-gradient(ellipse at 20% 90%,rgba(100,140,255,0.15) 0%,transparent 50%); pointer-events:none; }
+    .sidebar-top { padding:1.6rem 1.4rem 1.2rem; border-bottom:1px solid rgba(255,255,255,0.1); }
+    .brand { display:flex; align-items:center; gap:10px; }
+    .brand-icon { width:36px; height:36px; background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.3); border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .brand-icon svg { width:18px; height:18px; }
+    .brand-name { font-size:17px; font-weight:800; color:#fff; letter-spacing:-0.3px; }
+    .brand-name span { opacity:0.7; }
+    .nav { flex:1; padding:1rem 0.8rem; display:flex; flex-direction:column; gap:2px; }
+    .nav-section-label { font-size:9px; font-weight:600; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,0.35); padding:0.8rem 0.6rem 0.4rem; }
+    .nav-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; cursor:pointer; transition:background 0.15s; color:rgba(255,255,255,0.65); font-size:13px; font-weight:400; text-decoration:none; position:relative; }
+    .nav-item:hover { background:rgba(255,255,255,0.1); color:#fff; }
+    .nav-item.active { background:rgba(255,255,255,0.18); color:#fff; font-weight:500; }
+    .nav-item.active::before { content:''; position:absolute; left:0; top:20%; bottom:20%; width:3px; border-radius:2px; background:#fff; }
+    .nav-item svg { width:16px; height:16px; flex-shrink:0; opacity:0.8; }
+    .nav-item.active svg { opacity:1; }
+    .nav-badge { margin-left:auto; background:rgba(255,255,255,0.2); color:#fff; font-size:10px; font-weight:600; padding:1px 7px; border-radius:100px; }
+    .sidebar-bottom { padding:1rem 0.8rem 1.4rem; border-top:1px solid rgba(255,255,255,0.1); }
+    .user-card { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; background:rgba(255,255,255,0.1); cursor:pointer; transition:background 0.15s; }
+    .user-card:hover { background:rgba(255,255,255,0.18); }
+    .user-avatar { width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,#A890F0,#7EB8F0); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff; flex-shrink:0; }
+    .user-name { font-size:12px; font-weight:500; color:#fff; }
+    .user-role { font-size:10px; color:rgba(255,255,255,0.5); margin-top:1px; }
+    .user-card svg { width:15px; height:15px; color:rgba(255,255,255,0.6); margin-left:auto; }
+
+    /* ── MAIN ── */
+    .main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+    .topbar { height:60px; flex-shrink:0; background:#fff; border-bottom:1px solid #E8E4F4; display:flex; align-items:center; padding:0 1.8rem; gap:1rem; }
+    .topbar-title { font-size:16px; font-weight:700; color:#1A1635; }
+    .topbar-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
+    .topbar-date { font-size:12px; color:#8B85A8; }
+
+    .content { flex:1; overflow-y:auto; padding:1.6rem 1.8rem; }
+    .content::-webkit-scrollbar { width:4px; }
+    .content::-webkit-scrollbar-thumb { background:#C8C0E8; border-radius:2px; }
+
+    .page-header { margin-bottom:1.4rem; }
+    .page-header h2 { font-size:20px; font-weight:800; letter-spacing:-0.3px; }
+    .page-header p { font-size:13px; color:#8B85A8; margin-top:2px; }
+
+    /* ── SETTINGS CARDS ── */
+    .settings-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; max-width:880px; }
+    .card { background:#fff; border:1px solid #E8E4F4; border-radius:16px; padding:1.3rem 1.4rem; }
+    .card.full { grid-column:1/-1; }
+    .card-title { font-size:13px; font-weight:700; color:#1A1635; margin-bottom:1rem; display:flex; align-items:center; gap:8px; }
+    .card-title svg { width:15px; height:15px; color:#7060D0; }
+
+    .row { display:flex; align-items:center; justify-content:space-between; padding:11px 0; border-top:1px solid #F0EEF8; }
+    .row:first-of-type { border-top:none; }
+    .row-label { font-size:13px; font-weight:500; color:#1A1635; }
+    .row-sub { font-size:11px; color:#8B85A8; margin-top:2px; }
+
+    /* toggle */
+    .toggle { width:42px; height:24px; border-radius:100px; background:#D8D2EE; position:relative; cursor:pointer; transition:background 0.2s; flex-shrink:0; border:none; }
+    .toggle::after { content:''; position:absolute; top:3px; left:3px; width:18px; height:18px; border-radius:50%; background:#fff; transition:transform 0.2s; box-shadow:0 1px 3px rgba(0,0,0,0.2); }
+    .toggle.on { background:#7060D0; }
+    .toggle.on::after { transform:translateX(18px); }
+
+    /* input + button */
+    .input { padding:9px 12px; background:#F8F7FF; border:1.5px solid #E8E4F4; border-radius:10px; font-size:13px; font-family:inherit; color:#1A1635; outline:none; transition:border-color 0.2s; width:100%; }
+    .input:focus { border-color:#7060D0; background:#fff; }
+    .field-row { display:flex; gap:8px; align-items:flex-end; }
+    .field { flex:1; }
+    .field label { display:block; font-size:10px; font-weight:700; letter-spacing:1.2px; text-transform:uppercase; color:#8B85A8; margin-bottom:6px; }
+    .pw-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; }
+    .pw-note { font-size:12px; font-weight:600; }
+    .pw-note.ok { color:#16A34A; }
+    .pw-note.err { color:#C03050; }
+
+    .btn { padding:10px 16px; border-radius:10px; border:none; font-size:13px; font-weight:600; font-family:inherit; cursor:pointer; transition:transform 0.15s, box-shadow 0.2s, background 0.2s; white-space:nowrap; }
+    .btn-primary { background:linear-gradient(135deg,#7060D0,#5E87D4); color:#fff; box-shadow:0 2px 12px rgba(112,96,208,0.3); }
+    .btn-primary:hover { transform:translateY(-1px); box-shadow:0 4px 18px rgba(112,96,208,0.4); }
+    .btn-danger { background:#FDEEF1; color:#C03050; border:1.5px solid #F3CAD4; }
+    .btn-danger:hover { background:#FBE0E6; }
+
+    .saved-note { font-size:11px; color:#16A34A; font-weight:600; margin-top:8px; display:none; }
+
+    .acct { display:flex; align-items:center; gap:12px; margin-bottom:0.4rem; }
+    .acct-avatar { width:44px; height:44px; border-radius:50%; background:linear-gradient(135deg,#7060D0,#5E87D4); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:700; font-size:15px; }
+    .acct-name { font-size:14px; font-weight:700; }
+    .acct-role { font-size:12px; color:#8B85A8; }
+
+    .info-line { display:flex; justify-content:space-between; font-size:12px; padding:8px 0; border-top:1px solid #F0EEF8; color:#6B60A0; }
+    .info-line:first-child { border-top:none; }
+    .info-line span:last-child { color:#1A1635; font-weight:600; }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="10" r="2.5"/>
+          </svg>
+        </div>
+        <div class="brand-name">Stand<span>alyze</span></div>
+      </div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section-label">Genel</div>
+      <a class="nav-item" href="dashboard.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard
+      </a>
+      <div class="nav-section-label">Yönetim</div>
+      <a class="nav-item" href="live.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14"/><rect x="1" y="6" width="15" height="12" rx="2"/></svg>
+        Canlı Kamera <span class="nav-badge">2</span>
+      </a>
+      <a class="nav-item" href="recordings.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+        Kamera Kayıtları
+      </a>
+      <a class="nav-item" href="employees.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Çalışan Listesi <span class="nav-badge">7</span>
+      </a>
+      <a class="nav-item" href="reports.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Takip Raporları
+      </a>
+      <div class="nav-section-label">Sistem</div>
+      <a class="nav-item active" href="settings.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Ayarlar
+      </a>
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="user-card" onclick="logout()" title="Çıkış Yap">
+        <div class="user-avatar">AD</div>
+        <div><div class="user-name">Admin</div><div class="user-role">Çıkış için tıkla</div></div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title">Ayarlar</div>
+      <div class="topbar-right">
+        <span class="topbar-date" id="dateStr"></span>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="page-header">
+        <h2>Ayarlar</h2>
+        <p>Sistem tercihlerini ve hesap bilgilerini yönet</p>
+      </div>
+
+      <div class="settings-grid">
+
+        <!-- Hesap -->
+        <div class="card">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+            Hesap
+          </div>
+          <div class="acct">
+            <div class="acct-avatar">AD</div>
+            <div>
+              <div class="acct-name">Admin</div>
+              <div class="acct-role">Süper Admin</div>
+            </div>
+          </div>
+          <div class="row"><div><div class="row-label">Oturumu kapat</div><div class="row-sub">Giriş ekranına dön</div></div>
+            <button class="btn btn-danger" onclick="logout()">Çıkış Yap</button>
+          </div>
+        </div>
+
+        <!-- Bildirimler -->
+        <div class="card">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+            Bildirimler
+          </div>
+          <div class="row">
+            <div><div class="row-label">Masaüstü bildirimleri</div><div class="row-sub">Yeni analiz tamamlandığında uyar</div></div>
+            <button class="toggle" data-key="notif_desktop" onclick="toggle(this)"></button>
+          </div>
+          <div class="row">
+            <div><div class="row-label">Kamera uyarıları</div><div class="row-sub">Kamera çevrimdışı olduğunda bildir</div></div>
+            <button class="toggle" data-key="notif_camera" onclick="toggle(this)"></button>
+          </div>
+        </div>
+
+        <!-- Şifre Değişikliği -->
+        <div class="card full">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            Şifre Değişikliği
+          </div>
+          <div class="pw-grid">
+            <div class="field">
+              <label>Mevcut Şifre</label>
+              <input class="input" id="curPw" type="password" placeholder="••••••••" />
+            </div>
+            <div class="field">
+              <label>Yeni Şifre</label>
+              <input class="input" id="newPw" type="password" placeholder="En az 4 karakter" />
+            </div>
+            <div class="field">
+              <label>Yeni Şifre (Tekrar)</label>
+              <input class="input" id="cfPw" type="password" placeholder="••••••••" />
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:12px; margin-top:14px">
+            <button class="btn btn-primary" onclick="changePassword()">Şifreyi Güncelle</button>
+            <span class="pw-note" id="pwNote"></span>
+          </div>
+          <div class="row-sub" style="margin-top:10px">Admin hesabının giriş şifresini buradan değiştirebilirsin.</div>
+        </div>
+
+        <!-- Sistem Bilgisi -->
+        <div class="card full">
+          <div class="card-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            Sistem Bilgisi
+          </div>
+          <div class="info-line"><span>Uygulama</span><span>Standalyze</span></div>
+          <div class="info-line"><span>Sürüm</span><span>1.0.0</span></div>
+          <div class="info-line"><span>Aktif Kamera</span><span>Cam7 · Çalışma Alanı</span></div>
+          <div class="info-line"><span>Analiz Edilen Çalışan</span><span>7</span></div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.getElementById('dateStr').textContent = new Date().toLocaleDateString('tr-TR', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
+
+  function logout() { sessionStorage.clear(); window.location.replace('index.html'); }
+
+  // toggle'lar — tercih localStorage'da saklanır
+  document.querySelectorAll('.toggle').forEach(t => {
+    if (localStorage.getItem(t.dataset.key) === '1') t.classList.add('on');
+  });
+  function toggle(el) {
+    el.classList.toggle('on');
+    localStorage.setItem(el.dataset.key, el.classList.contains('on') ? '1' : '0');
+  }
+
+  // şifre değişikliği (admin hesabı)
+  function changePassword() {
+    const cur  = document.getElementById('curPw').value;
+    const nw   = document.getElementById('newPw').value;
+    const cf   = document.getElementById('cfPw').value;
+    const note = document.getElementById('pwNote');
+    const show = (msg, ok) => { note.textContent = msg; note.className = 'pw-note ' + (ok ? 'ok' : 'err'); };
+
+    // geçerli admin şifresi (index.html ile aynı varsayılan; değiştirilmişse localStorage'dan)
+    const effective = localStorage.getItem('pw_admin') || 'Admin@Standalyze25!';
+
+    if (!cur || !nw || !cf)  return show('Lütfen tüm alanları doldur.', false);
+    if (cur !== effective)   return show('Mevcut şifre hatalı.', false);
+    if (nw.length < 4)       return show('Yeni şifre en az 4 karakter olmalı.', false);
+    if (nw !== cf)           return show('Yeni şifreler eşleşmiyor.', false);
+
+    localStorage.setItem('pw_admin', nw);
+    document.getElementById('curPw').value = '';
+    document.getElementById('newPw').value = '';
+    document.getElementById('cfPw').value  = '';
+    show('✓ Şifre güncellendi.', true);
+  }
+</script>
+</body>
+</html>

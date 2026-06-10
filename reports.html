@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <!-- ERİŞİM KORUMASI: yalnızca admin olarak giriş yapanlar görebilir -->
+  <script>
+    (function () {
+      if (sessionStorage.getItem('role') !== 'admin') {
+        window.location.replace('index.html');
+      }
+    })();
+  </script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Standalyze — Takip Raporları</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; font-family: 'Plus Jakarta Sans', sans-serif; background: #F0EEF8; color: #1A1635; overflow: hidden; }
+    .app { display: flex; height: 100vh; }
+
+    /* ── SIDEBAR ── */
+    .sidebar { width: 240px; flex-shrink: 0; background: linear-gradient(180deg,#6B5FD4 0%,#5E78D0 100%); display: flex; flex-direction: column; position: relative; overflow: hidden; }
+    .sidebar::before { content:''; position:absolute; inset:0; background: radial-gradient(ellipse at 80% 10%,rgba(255,255,255,0.12) 0%,transparent 50%), radial-gradient(ellipse at 20% 90%,rgba(100,140,255,0.15) 0%,transparent 50%); pointer-events:none; }
+    .sidebar-top { padding:1.6rem 1.4rem 1.2rem; border-bottom:1px solid rgba(255,255,255,0.1); }
+    .brand { display:flex; align-items:center; gap:10px; }
+    .brand-icon { width:36px; height:36px; background:rgba(255,255,255,0.2); border:1px solid rgba(255,255,255,0.3); border-radius:10px; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+    .brand-icon svg { width:18px; height:18px; }
+    .brand-name { font-size:17px; font-weight:800; color:#fff; letter-spacing:-0.3px; }
+    .brand-name span { opacity:0.7; }
+    .nav { flex:1; padding:1rem 0.8rem; display:flex; flex-direction:column; gap:2px; }
+    .nav-section-label { font-size:9px; font-weight:600; letter-spacing:2px; text-transform:uppercase; color:rgba(255,255,255,0.35); padding:0.8rem 0.6rem 0.4rem; }
+    .nav-item { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; cursor:pointer; transition:background 0.15s; color:rgba(255,255,255,0.65); font-size:13px; font-weight:400; text-decoration:none; position:relative; }
+    .nav-item:hover { background:rgba(255,255,255,0.1); color:#fff; }
+    .nav-item.active { background:rgba(255,255,255,0.18); color:#fff; font-weight:500; }
+    .nav-item.active::before { content:''; position:absolute; left:0; top:20%; bottom:20%; width:3px; border-radius:2px; background:#fff; }
+    .nav-item svg { width:16px; height:16px; flex-shrink:0; opacity:0.8; }
+    .nav-item.active svg { opacity:1; }
+    .nav-badge { margin-left:auto; background:rgba(255,255,255,0.2); color:#fff; font-size:10px; font-weight:600; padding:1px 7px; border-radius:100px; }
+    .nav-badge.red { background:#FF5A7A; }
+    .sidebar-bottom { padding:1rem 0.8rem 1.4rem; border-top:1px solid rgba(255,255,255,0.1); }
+    .user-card { display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:10px; background:rgba(255,255,255,0.1); cursor:pointer; transition:background 0.15s; }
+    .user-card:hover { background:rgba(255,255,255,0.15); }
+    .user-avatar { width:32px; height:32px; border-radius:50%; background:linear-gradient(135deg,#A890F0,#7EB8F0); display:flex; align-items:center; justify-content:center; font-size:12px; font-weight:700; color:#fff; flex-shrink:0; }
+    .user-name { font-size:12px; font-weight:500; color:#fff; }
+    .user-role { font-size:10px; color:rgba(255,255,255,0.5); margin-top:1px; }
+    .user-card svg { width:14px; height:14px; color:rgba(255,255,255,0.4); margin-left:auto; }
+
+    /* ── MAIN ── */
+    .main { flex:1; display:flex; flex-direction:column; overflow:hidden; }
+    .topbar { height:60px; flex-shrink:0; background:#fff; border-bottom:1px solid #E8E4F4; display:flex; align-items:center; padding:0 1.8rem; gap:1rem; }
+    .topbar-title { font-size:16px; font-weight:700; color:#1A1635; }
+    .topbar-right { margin-left:auto; display:flex; align-items:center; gap:10px; }
+    .topbar-date { font-size:12px; color:#8B85A8; }
+    .notif-btn { width:34px; height:34px; background:#F0EEF8; border:none; border-radius:8px; display:flex; align-items:center; justify-content:center; cursor:pointer; position:relative; transition:background 0.15s; }
+    .notif-btn:hover { background:#E8E4F4; }
+    .notif-btn svg { width:16px; height:16px; color:#6B5FD4; }
+    .notif-dot { position:absolute; top:6px; right:6px; width:7px; height:7px; border-radius:50%; background:#FF5A7A; border:1.5px solid #fff; }
+
+    .content { flex:1; overflow-y:auto; padding:1.6rem 1.8rem; }
+    .content::-webkit-scrollbar { width:4px; }
+    .content::-webkit-scrollbar-thumb { background:#C8C0E8; border-radius:2px; }
+
+    /* ── PAGE HEADER ── */
+    .page-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1.4rem; }
+    .page-header h2 { font-size:20px; font-weight:800; letter-spacing:-0.3px; }
+    .page-header p { font-size:13px; color:#8B85A8; margin-top:2px; }
+    .btn-outline { display:flex; align-items:center; gap:6px; padding:8px 14px; border-radius:10px; border:1.5px solid #E0DAF8; background:#fff; font-size:12px; font-weight:600; color:#7060D0; cursor:pointer; transition:all 0.15s; font-family:inherit; }
+    .btn-outline:hover { background:#EFECFF; border-color:#C8C0E8; }
+    .btn-outline svg { width:14px; height:14px; }
+
+    /* ── STAT CARDS ── */
+    .stat-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:1.4rem; }
+    .stat-card { background:#fff; border:1px solid #E8E4F4; border-radius:14px; padding:1.1rem 1.2rem; }
+    .stat-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:0.6rem; }
+    .stat-icon { width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; }
+    .stat-icon svg { width:17px; height:17px; }
+    .stat-num { font-size:24px; font-weight:800; color:#1A1635; letter-spacing:-0.5px; }
+    .stat-label { font-size:12px; color:#8B85A8; margin-top:2px; }
+    .stat-sub { font-size:11px; color:#A89FD8; margin-top:4px; }
+
+    /* ── CHART PANELS ── */
+    .charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
+    .chart-full { margin-bottom:12px; }
+
+    .panel { background:#fff; border:1px solid #E8E4F4; border-radius:14px; padding:1.3rem; }
+    .panel-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:1.2rem; }
+    .panel-title { font-size:13px; font-weight:700; color:#1A1635; }
+    .panel-sub { font-size:11px; color:#8B85A8; margin-top:2px; }
+
+    .legend { display:flex; gap:14px; flex-wrap:wrap; }
+    .legend-item { display:flex; align-items:center; gap:5px; font-size:11px; color:#8B85A8; }
+    .legend-dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+
+    /* tabs */
+    .tabs { display:flex; gap:4px; background:#F0EEF8; padding:3px; border-radius:8px; }
+    .tab { padding:5px 12px; border-radius:6px; font-size:11px; font-weight:600; cursor:pointer; transition:all 0.15s; color:#8B85A8; border:none; background:none; font-family:inherit; }
+    .tab.active { background:#fff; color:#7060D0; box-shadow:0 1px 4px rgba(0,0,0,0.08); }
+
+    canvas { max-height: 220px; }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="10" r="2.5"/>
+          </svg>
+        </div>
+        <div class="brand-name">Stand<span>alyze</span></div>
+      </div>
+    </div>
+    <nav class="nav">
+      <div class="nav-section-label">Genel</div>
+      <a class="nav-item" href="dashboard.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Dashboard
+      </a>
+      <div class="nav-section-label">Yönetim</div>
+      <a class="nav-item" href="live.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14"/><rect x="1" y="6" width="15" height="12" rx="2"/></svg>
+        Canlı Kamera <span class="nav-badge">2</span>
+      </a>
+      <a class="nav-item" href="recordings.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+        Kamera Kayıtları
+      </a>
+      <a class="nav-item" href="employees.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Çalışan Listesi <span class="nav-badge">7</span>
+      </a>
+      <a class="nav-item active" href="reports.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+        Takip Raporları
+      </a>
+      <div class="nav-section-label">Sistem</div>
+      <a class="nav-item" href="settings.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Ayarlar
+      </a>
+    </nav>
+    <div class="sidebar-bottom">
+      <div class="user-card">
+        <div class="user-avatar">AD</div>
+        <div><div class="user-name">Admin</div><div class="user-role">Süper Admin</div></div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18l6-6-6-6"/></svg>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title">Takip Raporları</div>
+      <div class="topbar-right">
+        <span id="dataSource" style="font-size:11px;font-weight:600;color:#8B85A8">● Yükleniyor...</span>
+        <span class="topbar-date" id="dateStr"></span>
+        <button class="notif-btn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          <div class="notif-dot"></div>
+        </button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="page-header">
+        <div>
+          <h2>Aktivite Analiz Raporu</h2>
+          <p id="pageSubtitle">Cam7 · Çalışma Alanı verileri yükleniyor...</p>
+        </div>
+        <button class="btn-outline" onclick="exportCSV()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          CSV İndir
+        </button>
+      </div>
+
+      <!-- stat cards -->
+      <div class="stat-row" id="statRow"></div>
+
+      <!-- charts -->
+      <div class="charts-grid">
+        <!-- Aktivite dağılımı donut -->
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="panel-title">Genel Aktivite Dağılımı</div>
+              <div class="panel-sub">Tüm çalışanların toplam süresi</div>
+            </div>
+          </div>
+          <canvas id="donutChart"></canvas>
+        </div>
+
+        <!-- Kişi başı toplam süre -->
+        <div class="panel">
+          <div class="panel-header">
+            <div>
+              <div class="panel-title">Kişi Başı Toplam Süre</div>
+              <div class="panel-sub">Dakika cinsinden</div>
+            </div>
+          </div>
+          <canvas id="barChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Stacked aktivite karşılaştırma -->
+      <div class="panel chart-full">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Çalışan Bazlı Aktivite Karşılaştırması</div>
+            <div class="panel-sub">Ayakta / Yürüme / Oturma dağılımı (%)</div>
+          </div>
+          <div class="legend">
+            <div class="legend-item"><div class="legend-dot" style="background:#7060D0"></div>Ayakta</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#5E87D4"></div>Yürüme</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#D06080"></div>Oturma</div>
+            <div class="legend-item"><div class="legend-dot" style="background:#C0BAD8"></div>Bilinmiyor</div>
+          </div>
+        </div>
+        <canvas id="stackedChart" style="max-height:180px"></canvas>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  const FALLBACK = {"berk":{"sitting":{"seconds":12.5,"percent":4.0},"standing":{"seconds":205.7,"percent":65.0},"unknown":{"seconds":7.2,"percent":2.3},"walking":{"seconds":90.9,"percent":28.7}},"kadir":{"sitting":{"seconds":270.6,"percent":13.2},"standing":{"seconds":1346.2,"percent":65.9},"unknown":{"seconds":46.9,"percent":2.3},"walking":{"seconds":379.6,"percent":18.6}},"sevcan":{"sitting":{"seconds":179.2,"percent":11.4},"standing":{"seconds":1034.5,"percent":65.5},"unknown":{"seconds":31.9,"percent":2.0},"walking":{"seconds":332.9,"percent":21.1}},"mabed":{"sitting":{"seconds":97.6,"percent":20.1},"standing":{"seconds":282.0,"percent":58.0},"unknown":{"seconds":9.0,"percent":1.9},"walking":{"seconds":97.4,"percent":20.0}},"mazhar":{"sitting":{"seconds":21.0,"percent":7.5},"standing":{"seconds":187.3,"percent":67.3},"unknown":{"seconds":6.2,"percent":2.2},"walking":{"seconds":63.7,"percent":22.9}},"kevser":{"sitting":{"seconds":2.7,"percent":2.6},"standing":{"seconds":62.7,"percent":60.9},"unknown":{"seconds":3.5,"percent":3.4},"walking":{"seconds":34.1,"percent":33.1}},"sevgi":{"sitting":{"seconds":12.0,"percent":16.0},"standing":{"seconds":35.4,"percent":47.1},"unknown":{"seconds":2.2,"percent":2.9},"walking":{"seconds":25.6,"percent":34.1}}};
+
+  const COLORS = ['#7060D0','#5E87D4','#D06080','#40A878','#D09040','#9060C0','#4090B0'];
+
+  document.getElementById('dateStr').textContent = new Date().toLocaleDateString('tr-TR', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
+
+  // ── AWS YAPILANDIRMASI ──────────────────────────────────────────────
+  // Lambda + API Gateway kurulduktan sonra buraya URL'yi yapıştır.
+  // AWS Console → API Gateway → standalyze-api → URL'yi kopyala.
+  // Boş bırakılırsa otomatik olarak FALLBACK verisi kullanılır.
+  const API_URL = '';  // örn: 'https://abc123def.execute-api.eu-central-1.amazonaws.com'
+  // ────────────────────────────────────────────────────────────────────
+
+  async function loadData() {
+    let data;
+    // API_URL doluysa AWS'den, boşsa veya hata alırsa FALLBACK'ten
+    if (API_URL) {
+      try {
+        const res = await fetch(`${API_URL}/reports?camera=CAM7`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        data = await res.json();
+        document.getElementById('dataSource').textContent = '● AWS Canlı Veri';
+        document.getElementById('dataSource').style.color = '#16A34A';
+      } catch(e) {
+        console.warn('AWS API erişilemedi, FALLBACK kullanılıyor:', e.message);
+        data = FALLBACK;
+        document.getElementById('dataSource').textContent = '● Yerel Veri';
+        document.getElementById('dataSource').style.color = '#D97706';
+      }
+    } else {
+      // API_URL henüz tanımlı değil — geliştirme / demo modu
+      try {
+        const res = await fetch('http://localhost:8080/cam7_report.json');
+        if (!res.ok) throw new Error();
+        data = await res.json();
+        document.getElementById('dataSource').textContent = '● Yerel Sunucu';
+        document.getElementById('dataSource').style.color = '#2563EB';
+      } catch {
+        data = FALLBACK;
+        document.getElementById('dataSource').textContent = '● Yerel Veri';
+        document.getElementById('dataSource').style.color = '#D97706';
+      }
+    }
+    render(data);
+  }
+
+  function render(data) {
+    const entries = Object.entries(data);
+    const names   = entries.map(([n]) => n.charAt(0).toUpperCase() + n.slice(1));
+
+    // totals
+    let totStand=0, totWalk=0, totSit=0, totUnk=0, totAll=0;
+    entries.forEach(([,a]) => {
+      totStand += a.standing.seconds;
+      totWalk  += a.walking.seconds;
+      totSit   += a.sitting.seconds;
+      totUnk   += a.unknown.seconds;
+      totAll   += a.standing.seconds + a.walking.seconds + a.sitting.seconds + a.unknown.seconds;
+    });
+
+    document.getElementById('pageSubtitle').textContent =
+      `Cam7 · Çalışma Alanı · ${entries.length} çalışan · Toplam ${(totAll/60).toFixed(1)} dk analiz edildi`;
+
+    // stat cards
+    const stats = [
+      { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#7060D0" stroke-width="2" width="17" height="17"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="21"/><line x1="9" y1="12" x2="15" y2="12"/></svg>`, label:'Toplam Ayakta', val: (totStand/60).toFixed(1)+'dk', sub: Math.round(totStand/totAll*100)+'% oran', bg:'#EFECFF', col:'#7060D0' },
+      { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#5E87D4" stroke-width="2" width="17" height="17"><circle cx="12" cy="5" r="3"/><path d="M9 21l3-8 3 8"/><path d="M6 12l6 2 6-2"/></svg>`, label:'Toplam Yürüme', val: (totWalk/60).toFixed(1)+'dk', sub: Math.round(totWalk/totAll*100)+'% oran', bg:'#EFF6FF', col:'#5E87D4' },
+      { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#D06080" stroke-width="2" width="17" height="17"><path d="M3 18h18M6 18V9a6 6 0 0 1 12 0v9"/></svg>`, label:'Toplam Oturma', val: (totSit/60).toFixed(1)+'dk', sub: Math.round(totSit/totAll*100)+'% oran', bg:'#FFF0F6', col:'#D06080' },
+      { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2" width="17" height="17"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, label:'Analiz Süresi', val: (totAll/60).toFixed(1)+'dk', sub: entries.length+' çalışan', bg:'#F0FFF8', col:'#16A34A' },
+    ];
+    document.getElementById('statRow').innerHTML = stats.map(s => `
+      <div class="stat-card">
+        <div class="stat-top">
+          <div class="stat-icon" style="background:${s.bg}">${s.icon}</div>
+        </div>
+        <div class="stat-num" style="color:${s.col}">${s.val}</div>
+        <div class="stat-label">${s.label}</div>
+        <div class="stat-sub">${s.sub}</div>
+      </div>
+    `).join('');
+
+    // donut
+    new Chart(document.getElementById('donutChart'), {
+      type: 'doughnut',
+      data: {
+        labels: ['Ayakta','Yürüme','Oturma','Bilinmiyor'],
+        datasets: [{
+          data: [totStand, totWalk, totSit, totUnk].map(v => +v.toFixed(1)),
+          backgroundColor: ['#7060D0','#5E87D4','#D06080','#E0DAF8'],
+          borderWidth: 0,
+          hoverOffset: 6,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        cutout: '68%',
+        plugins: {
+          legend: { position:'bottom', labels:{ font:{family:'Plus Jakarta Sans',size:11}, padding:12, usePointStyle:true } },
+          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${(ctx.raw/60).toFixed(1)}dk (${Math.round(ctx.raw / totAll * 100)}%)` } }
+        }
+      }
+    });
+
+    // bar — toplam süre per person
+    const totals = entries.map(([,a]) => +((a.standing.seconds+a.walking.seconds+a.sitting.seconds+a.unknown.seconds)/60).toFixed(1));
+    new Chart(document.getElementById('barChart'), {
+      type: 'bar',
+      data: {
+        labels: names,
+        datasets: [{
+          label: 'Toplam (dk)',
+          data: totals,
+          backgroundColor: COLORS,
+          borderRadius: 8,
+          borderSkipped: false,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        plugins: { legend:{ display:false }, tooltip:{ callbacks:{ label: ctx => ` ${ctx.raw} dk` } } },
+        scales: {
+          y: { grid:{ color:'#F0EEF8' }, ticks:{ font:{family:'Plus Jakarta Sans',size:10}, color:'#8B85A8' } },
+          x: { grid:{ display:false }, ticks:{ font:{family:'Plus Jakarta Sans',size:11}, color:'#1A1635' } }
+        }
+      }
+    });
+
+    // stacked bar — aktivite yüzdeleri
+    new Chart(document.getElementById('stackedChart'), {
+      type: 'bar',
+      data: {
+        labels: names,
+        datasets: [
+          { label:'Ayakta',     data: entries.map(([,a]) => +a.standing.percent.toFixed(1)), backgroundColor:'#7060D0', borderRadius:0, stack:'s' },
+          { label:'Yürüme',     data: entries.map(([,a]) => +a.walking.percent.toFixed(1)),  backgroundColor:'#5E87D4', borderRadius:0, stack:'s' },
+          { label:'Oturma',     data: entries.map(([,a]) => +a.sitting.percent.toFixed(1)),  backgroundColor:'#D06080', borderRadius:0, stack:'s' },
+          { label:'Bilinmiyor', data: entries.map(([,a]) => +a.unknown.percent.toFixed(1)),  backgroundColor:'#E0DAF8', borderRadius:0, stack:'s' },
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true,
+        plugins: { legend:{ display:false } },
+        scales: {
+          y: { stacked:true, max:100, grid:{ color:'#F0EEF8' }, ticks:{ callback: v => v+'%', font:{family:'Plus Jakarta Sans',size:10}, color:'#8B85A8' } },
+          x: { stacked:true, grid:{ display:false }, ticks:{ font:{family:'Plus Jakarta Sans',size:11}, color:'#1A1635' } }
+        }
+      }
+    });
+  }
+
+  function exportCSV() {
+    const rows = [['İsim','Ayakta(s)','Ayakta(%)','Yürüme(s)','Yürüme(%)','Oturma(s)','Oturma(%)','Bilinmiyor(s)','Toplam(s)']];
+    Object.entries(FALLBACK).forEach(([name,a]) => {
+      const total = a.standing.seconds+a.walking.seconds+a.sitting.seconds+a.unknown.seconds;
+      rows.push([name, a.standing.seconds, a.standing.percent, a.walking.seconds, a.walking.percent, a.sitting.seconds, a.sitting.percent, a.unknown.seconds, total.toFixed(1)]);
+    });
+    const csv = rows.map(r=>r.join(',')).join('\n');
+    const link = document.createElement('a');
+    link.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+    link.download = 'takip_raporu.csv';
+    link.click();
+  }
+
+  loadData();
+</script>
+  <!-- ÇIKIŞ: kullanıcı kartına tıklayınca oturum kapanır -->
+  <script>
+    function logout() { sessionStorage.clear(); window.location.replace('index.html'); }
+    document.querySelectorAll('.user-card').forEach(function (el) {
+      el.style.cursor = 'pointer';
+      el.title = 'Çıkış Yap';
+      el.addEventListener('click', logout);
+    });
+  </script>
+</body>
+</html>
