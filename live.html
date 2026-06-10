@@ -247,22 +247,22 @@
       <!-- Camera Grid -->
       <div class="cam-grid">
 
-        <!-- CAM 1 -->
+        <!-- CAM 1 — CAM7 -->
         <div class="cam-card" id="cam1card">
           <div class="cam-feed-wrap">
             <div class="cam-feed-bg cam1-bg"></div>
-            <!-- TODO: AWS S3 stream URL buraya -->
-            <!-- <video class="cam-video" id="cam1video" src="https://your-bucket.s3.amazonaws.com/live/cam1.m3u8" autoplay muted loop></video> -->
+            <!-- HLS stream: cam_unified.py çalışınca S3'e yüklenen .m3u8 dosyası -->
+            <video class="cam-video" id="cam1video" autoplay muted playsinline></video>
             <div class="cam-overlay">
               <div class="cam-top">
                 <div class="cam-live-badge">CANLI</div>
                 <div class="cam-time" id="clock1"></div>
               </div>
               <div class="cam-bottom">
-                <div class="cam-name-tag">Çalışma Alanı 1</div>
+                <div class="cam-name-tag">CAM7 · Çalışma Alanı 1</div>
               </div>
             </div>
-            <div class="cam-no-signal">
+            <div class="cam-no-signal" id="nosignal1">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14"/><rect x="1" y="6" width="15" height="12" rx="2"/></svg>
               <p>Akış bekleniyor</p>
             </div>
@@ -270,35 +270,34 @@
           <div class="cam-footer">
             <div class="cam-footer-left">
               <div class="cam-footer-name">Çalışma Alanı 1</div>
-              <div class="cam-footer-meta">CAM1 · 1080p · Demo Modu</div>
+              <div class="cam-footer-meta" id="meta1">CAM7 · Demo Modu</div>
             </div>
             <div class="cam-footer-right">
-              <button class="cam-action" title="Tam Ekran">
+              <button class="cam-action" title="Tam Ekran" onclick="fullscreen('cam1video')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
               </button>
-              <button class="cam-action" title="Kayda Al" onclick="goRecordings()">
+              <button class="cam-action" title="Kayıtlar" onclick="goRecordings()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
               </button>
             </div>
           </div>
         </div>
 
-        <!-- CAM 2 -->
+        <!-- CAM 2 — CAM8 -->
         <div class="cam-card" id="cam2card">
           <div class="cam-feed-wrap">
             <div class="cam-feed-bg cam2-bg"></div>
-            <!-- TODO: AWS S3 stream URL buraya -->
-            <!-- <video class="cam-video" id="cam2video" src="https://your-bucket.s3.amazonaws.com/live/cam2.m3u8" autoplay muted loop></video> -->
+            <video class="cam-video" id="cam2video" autoplay muted playsinline></video>
             <div class="cam-overlay">
               <div class="cam-top">
                 <div class="cam-live-badge">CANLI</div>
                 <div class="cam-time" id="clock2"></div>
               </div>
               <div class="cam-bottom">
-                <div class="cam-name-tag">Çalışma Alanı 2</div>
+                <div class="cam-name-tag">CAM8 · Çalışma Alanı 2</div>
               </div>
             </div>
-            <div class="cam-no-signal">
+            <div class="cam-no-signal" id="nosignal2">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14"/><rect x="1" y="6" width="15" height="12" rx="2"/></svg>
               <p>Akış bekleniyor</p>
             </div>
@@ -306,13 +305,13 @@
           <div class="cam-footer">
             <div class="cam-footer-left">
               <div class="cam-footer-name">Çalışma Alanı 2</div>
-              <div class="cam-footer-meta">CAM2 · 1080p · Demo Modu</div>
+              <div class="cam-footer-meta" id="meta2">CAM8 · Demo Modu</div>
             </div>
             <div class="cam-footer-right">
-              <button class="cam-action" title="Tam Ekran">
+              <button class="cam-action" title="Tam Ekran" onclick="fullscreen('cam2video')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg>
               </button>
-              <button class="cam-action" title="Kayda Al" onclick="goRecordings()">
+              <button class="cam-action" title="Kayıtlar" onclick="goRecordings()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
               </button>
             </div>
@@ -324,17 +323,24 @@
       <!-- Info -->
       <div class="info-box">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <p>Canlı akış <strong>AWS S3 veya bir stream servisi</strong> entegre edildiğinde aktif olacaktır. Şu an demo modunda çalışmaktadır. Video kaynağı eklemek için <code>&lt;video&gt;</code> tag'larının <code>src</code> alanına stream URL'sini girin.</p>
+        <p id="streamInfo">cam_unified.py çalışınca stream otomatik başlar. Akış yokken demo modu aktiftir.</p>
       </div>
 
     </div>
   </div>
 </div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/hls.js/1.4.12/hls.min.js"></script>
 <script>
-  document.getElementById('dateStr').textContent = new Date().toLocaleDateString('tr-TR', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+  const S3_BASE = 'https://standalyze-2026.s3.eu-central-1.amazonaws.com';
+  const STREAMS = {
+    cam7: `${S3_BASE}/live/cam7/playlist.m3u8`,
+    cam8: `${S3_BASE}/live/cam8/playlist.m3u8`,
+  };
 
-  // live clock on both feeds
+  document.getElementById('dateStr').textContent =
+    new Date().toLocaleDateString('tr-TR', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+
   function updateClocks() {
     const t = new Date().toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
     document.getElementById('clock1').textContent = t;
@@ -343,9 +349,42 @@
   updateClocks();
   setInterval(updateClocks, 1000);
 
+  function loadStream(videoEl, noSignalEl, metaEl, url, label) {
+    if (Hls.isSupported()) {
+      const hls = new Hls({ liveSyncDurationCount: 3, liveMaxLatencyDurationCount: 6 });
+      hls.loadSource(url);
+      hls.attachMedia(videoEl);
+      hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        videoEl.play();
+        noSignalEl.style.display = 'none';
+        metaEl.textContent = `${label} · HLS Canlı`;
+      });
+      hls.on(Hls.Events.ERROR, (e, data) => {
+        if (data.fatal) {
+          noSignalEl.style.display = 'flex';
+          metaEl.textContent = `${label} · Akış bekleniyor`;
+          setTimeout(() => loadStream(videoEl, noSignalEl, metaEl, url, label), 10000);
+        }
+      });
+    } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+      videoEl.src = url;
+      videoEl.addEventListener('loadedmetadata', () => {
+        videoEl.play();
+        noSignalEl.style.display = 'none';
+        metaEl.textContent = `${label} · HLS Canlı`;
+      });
+    }
+  }
+
+  loadStream(document.getElementById('cam1video'), document.getElementById('nosignal1'), document.getElementById('meta1'), STREAMS.cam7, 'CAM7');
+  loadStream(document.getElementById('cam2video'), document.getElementById('nosignal2'), document.getElementById('meta2'), STREAMS.cam8, 'CAM8');
+
+  function fullscreen(id) {
+    const el = document.getElementById(id);
+    if (el.requestFullscreen) el.requestFullscreen();
+  }
   function goRecordings() { window.location.href = 'recordings.html'; }
 </script>
-  <!-- ÇIKIŞ: kullanıcı kartına tıklayınca oturum kapanır -->
   <script>
     function logout() { sessionStorage.clear(); window.location.replace('index.html'); }
     document.querySelectorAll('.user-card').forEach(function (el) {

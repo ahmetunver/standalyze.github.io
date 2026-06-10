@@ -394,7 +394,7 @@
       <!-- Info -->
       <div class="info-box">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <p>Video dosyaları <strong>AWS S3'e yüklendiğinde</strong> kayıt listesi otomatik olarak güncellenecektir. Şu an demo modunda çalışmaktadır. Videoları oynatmak için <code>recordings</code> dizinine ekleyin veya S3 URL'lerini tanımlayın.</p>
+        <p id="recInfoMsg">S3'ten kayıtlar yükleniyor...</p>
       </div>
 
     </div>
@@ -402,13 +402,161 @@
 </div>
 
 <script>
-  document.getElementById('dateStr').textContent = new Date().toLocaleDateString('tr-TR', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+  const S3_BASE    = 'https://standalyze-2026.s3.eu-central-1.amazonaws.com';
+  const S3_REGION  = 'eu-central-1';
+  const BUCKET     = 'standalyze-2026';
 
-  /* ── DEMO RECORDINGS
-     AWS hazır olunca src alanına S3 URL ekle:
-     src: 'https://your-bucket.s3.amazonaws.com/cam7/rec1.mp4'
-  ── */
-  const recordings = [
+  document.getElementById('dateStr').textContent =
+    new Date().toLocaleDateString('tr-TR', {weekday:'long', year:'numeric', month:'long', day:'numeric'});
+
+  let recordings = [];
+  let activeId   = null;
+  const video    = document.getElementById('videoPlayer');
+
+  // S3 XML listesini parse edip recordings dizisini doldur
+  async function loadRecordingsFromS3() {
+    try {
+      // CAM7 ve CAM8 için ayrı ayrı listele
+      const [res7, res8] = await Promise.all([
+        fetch(`${S3_BASE}?prefix=recordings/cam7/&list-type=2`).catch(() => null),
+        fetch(`${S3_BASE}?prefix=recordings/cam8/&list-type=2`).catch(() => null),
+      ]);
+
+      let list = [];
+      for (const [res, camLabel] of [[res7,'CAM7'],[res8,'CAM8']]) {
+        if (!res || !res.ok) continue;
+        const xml  = await res.text();
+        const parser = new DOMParser();
+        const doc  = parser.parseFromString(xml, 'text/xml');
+        const keys = [...doc.querySelectorAll('Contents Key')];
+        for (const keyEl of keys) {
+          const key = keyEl.textContent;
+          if (!key.endsWith('.mp4')) continue;
+          const parts    = key.split('/');
+          const filename = parts[parts.length - 1];
+          const dateMatch = filename.match(/(\d{4}-\d{2}-\d{2})/);
+          const date = dateMatch ? dateMatch[1] : '—';
+          const sizeEl = keyEl.parentElement?.querySelector('Size');
+          const sizeMB = sizeEl ? (parseInt(sizeEl.textContent) / 1024 / 1024).toFixed(0) + ' MB' : '—';
+          list.push({
+            id:   list.length + 1,
+            name: `${camLabel} — ${date}`,
+            cam:  camLabel,
+            date: date,
+            size: sizeMB,
+            src:  `${S3_BASE}/${key}`,
+            duration: '--:--',
+          });
+        }
+      }
+
+      // Tarihe göre sırala (en yeni önce)
+      list.sort((a,b) => b.date.localeCompare(a.date));
+      recordings = list;
+
+      document.getElementById('recInfoMsg').style.display = 'none';
+      document.getElementById('listCount').textContent = `${list.length} kayıt`;
+      renderList();
+
+      if (list.length === 0) {
+        document.getElementById('recInfoMsg').style.display = 'flex';
+        document.getElementById('recInfoMsg').textContent = 'Henüz kayıt yok. cam_unified.py çalışınca buraya eklenir.';
+      }
+
+    } catch(e) {
+      document.getElementById('recInfoMsg').textContent = 'Kayıtlar yüklenemedi. S3 CORS ayarını kontrol et.';
+      console.error(e);
+    }
+  }
+
+  function renderList() {
+    const list = document.getElementById('recList');
+    if (recordings.length === 0) {
+      list.innerHTML = '<div style="padding:1rem;font-size:13px;color:#8B85A8;text-align:center">Kayıt bulunamadı</div>';
+      return;
+    }
+    list.innerHTML = recordings.map(r => `
+      <div class="rec-item ${activeId === r.id ? 'active' : ''}" onclick="selectRec(${r.id})">
+        <div class="rec-thumb">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14"/><rect x="1" y="6" width="15" height="12" rx="2"/></svg>
+          <span class="dur">${r.duration}</span>
+        </div>
+        <div class="rec-info">
+          <div class="rec-name">${r.name}</div>
+          <div class="rec-meta">${r.date} · ${r.size}</div>
+        </div>
+        <span class="rec-cam">${r.cam}</span>
+      </div>
+    `).join('');
+  }
+
+  function selectRec(id) {
+    activeId = id;
+    const rec = recordings.find(r => r.id === id);
+    document.getElementById('playerTitle').textContent = rec.name;
+    document.getElementById('playerCam').textContent   = rec.cam;
+    document.getElementById('overlayTag').textContent  = rec.cam;
+    if (rec.src) {
+      video.src = rec.src;
+      video.style.display = 'block';
+      document.getElementById('videoPlaceholder').style.display = 'none';
+      video.load();
+    }
+    renderList();
+  }
+
+  function togglePlay() {
+    if (!video.src) return;
+    if (video.paused) {
+      video.play();
+      document.getElementById('ctrlPlayIcon').innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+    } else {
+      video.pause();
+      document.getElementById('ctrlPlayIcon').innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>';
+    }
+  }
+
+  function skipBack() { if (video.src) video.currentTime = Math.max(0, video.currentTime - 10); }
+  function skipFwd()  { if (video.src) video.currentTime = Math.min(video.duration, video.currentTime + 10); }
+  function setVol(v)  { video.volume = v; }
+
+  function seek(e) {
+    if (!video.src || !video.duration) return;
+    const bar = document.getElementById('progressBar');
+    const pct = e.offsetX / bar.offsetWidth;
+    video.currentTime = pct * video.duration;
+  }
+
+  function fmtTime(s) {
+    if (isNaN(s)) return '0:00';
+    const m   = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2,'0')}`;
+  }
+
+  video.addEventListener('timeupdate', () => {
+    const pct = video.duration ? (video.currentTime / video.duration * 100) : 0;
+    document.getElementById('progressFill').style.width = pct + '%';
+    document.getElementById('timeCurrent').textContent = fmtTime(video.currentTime);
+  });
+  video.addEventListener('loadedmetadata', () => {
+    document.getElementById('timeDuration').textContent = fmtTime(video.duration);
+  });
+  video.addEventListener('ended', () => {
+    document.getElementById('ctrlPlayIcon').innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>';
+  });
+
+  loadRecordingsFromS3();
+</script>
+  <script>
+    function logout() { sessionStorage.clear(); window.location.replace('index.html'); }
+    document.querySelectorAll('.user-card').forEach(function (el) {
+      el.style.cursor = 'pointer';
+      el.title = 'Çıkış Yap';
+      el.addEventListener('click', logout);
+    });
+  </script>
+</body>
     {
       id: 1,
       name: 'Çalışma Alanı 1 — Kayıt',
