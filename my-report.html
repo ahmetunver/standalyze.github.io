@@ -215,9 +215,11 @@
     let data;
     if (API_URL) {
       try {
-        const res = await fetch(`${API_URL}/reports?camera=CAM7`);
+        // Her iki kameranın birleşik verisini çek — çalışan hangi kamerada görünmüşse gelsin
+        const res = await fetch(`${API_URL}/reports?camera=both`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        data = await res.json();
+        const raw = await res.json();
+        data = (raw && raw.merged) ? raw.merged : raw;
         document.getElementById('dataSource').textContent = '● AWS Canlı Veri';
         document.getElementById('dataSource').style.color = '#16A34A';
       } catch(e) {

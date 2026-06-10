@@ -508,6 +508,11 @@
       <div class="topbar-title">Dashboard</div>
       <div class="topbar-right">
         <span id="dataSource" style="font-size:11px;font-weight:600;color:#8B85A8">● Yükleniyor...</span>
+        <div style="display:flex;gap:2px;background:rgba(112,96,208,0.08);border-radius:8px;padding:3px;">
+          <button class="cam-btn" data-cam="both" onclick="setCamera('both')" style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;background:rgba(112,96,208,0.12);color:#6B5FD4;">CAM7+8</button>
+          <button class="cam-btn" data-cam="CAM7" onclick="setCamera('CAM7')" style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:400;background:transparent;color:#6B5FD4;">CAM7</button>
+          <button class="cam-btn" data-cam="CAM8" onclick="setCamera('CAM8')" style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:400;background:transparent;color:#6B5FD4;">CAM8</button>
+        </div>
         <span class="topbar-date" id="dateStr"></span>
         <button class="notif-btn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -691,19 +696,29 @@
   const API_URL = '';  // Lambda hazır olunca buraya API Gateway URL'ini yapıştır
   /* ─────────────────────────────────────────────────────────────────── */
 
+  let activeCamera = 'both';
+
+  function setCamera(cam) {
+    activeCamera = cam;
+    document.querySelectorAll('.cam-btn').forEach(b => {
+      b.style.fontWeight = b.dataset.cam === cam ? '600' : '400';
+      b.style.background = b.dataset.cam === cam ? 'rgba(112,96,208,0.12)' : 'transparent';
+    });
+    loadData();
+  }
+
   /* ── FETCH FROM AWS API (veya yerel sunucu) ── */
   async function loadData() {
-    let data;
+    let raw;
     if (API_URL) {
       try {
-        const res = await fetch(`${API_URL}/reports?camera=CAM7`);
+        const res = await fetch(`${API_URL}/reports?camera=${activeCamera}`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        data = await res.json();
-        document.getElementById('dataSource').textContent = '● AWS Canlı Veri';
+        raw = await res.json();
+        document.getElementById('dataSource').textContent = `● AWS Canlı (${activeCamera === 'both' ? 'CAM7+CAM8' : activeCamera})`;
         document.getElementById('dataSource').style.color = '#16A34A';
       } catch(e) {
-        console.warn('AWS API erişilemedi:', e.message);
-        data = FALLBACK_DATA;
+        raw = { merged: FALLBACK_DATA };
         document.getElementById('dataSource').textContent = '● Yerel Veri';
         document.getElementById('dataSource').style.color = '#D97706';
       }
@@ -711,15 +726,17 @@
       try {
         const res = await fetch('http://localhost:8080/cam7_report.json');
         if (!res.ok) throw new Error('server error');
-        data = await res.json();
+        const d = await res.json();
+        raw = { merged: d, CAM7: d, CAM8: {} };
         document.getElementById('dataSource').textContent = '● Yerel Sunucu';
         document.getElementById('dataSource').style.color = '#2563EB';
       } catch(e) {
-        data = FALLBACK_DATA;
+        raw = { merged: FALLBACK_DATA };
         document.getElementById('dataSource').textContent = '● Yerel Veri';
         document.getElementById('dataSource').style.color = '#D97706';
       }
     }
+    const data = (raw && raw.merged) ? raw.merged : raw;
     renderTable(data);
     renderWelcome(data);
   }
