@@ -298,6 +298,11 @@
   /* ─────────────────────────────────────────────────────────────────── */
 
   let activeCamera = 'both';
+  let lastUpdatedText = '';
+
+  function labelCamera(cam = activeCamera) {
+    return cam === 'both' ? 'CAM7+CAM8' : cam;
+  }
 
   function setCamera(cam) {
     activeCamera = cam;
@@ -308,36 +313,142 @@
     loadData();
   }
 
-  /* ── FETCH FROM AWS API (veya yerel sunucu) ── */
-  async function loadData() {
-    let raw;
-    if (API_URL) {
-      try {
-        const res = await fetch(`${API_URL}/reports?camera=${activeCamera}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        raw = await res.json();
-        document.getElementById('dataSource').textContent = `● AWS Canlı (${activeCamera === 'both' ? 'CAM7+CAM8' : activeCamera})`;
-        document.getElementById('dataSource').style.color = '#16A34A';
-      } catch(e) {
-        raw = { merged: FALLBACK_DATA };
-        document.getElementById('dataSource').textContent = '● Yerel Veri';
-        document.getElementById('dataSource').style.color = '#D97706';
-      }
+  function hasActivity(obj) {
+    return obj && typeof obj === 'object' && obj.standing && obj.walking && obj.sitting && obj.unknown;
+  }
+
+  function isReportData(obj) {
+    return obj && typeof obj === 'object' && Object.values(obj).some(hasActivity);
+  }
+
+  function normalizeActivity(person, key, totalSeconds) {
+    const item = person && person[key] ? person[key] : {};
+    const seconds = Number(item.seconds ?? person?.[`${key}_seconds`] ?? 0);
+    const percent = Number(item.percent ?? (totalSeconds > 0 ? (seconds / totalSeconds) * 100 : 0));
+    return { seconds, percent };
+  }
+
+  function normalizeReport(data) {
+    const result = {};
+    if (!data || typeof data !== 'object') return result;
+    Object.entries(data).forEach(([name, person]) => {
+      if (!person || typeof person !== 'object') return;
+      const totalSeconds = ['standing','walking','sitting','unknown'].reduce((sum, key) => {
+        const item = person[key] || {};
+        return sum + Number(item.seconds ?? person[`${key}_seconds`] ?? 0);
+      }, 0);
+      result[name] = {
+        sitting: normalizeActivity(person, 'sitting', totalSeconds),
+        standing: normalizeActivity(person, 'standing', totalSeconds),
+        walking: normalizeActivity(person, 'walking', totalSeconds),
+        unknown: normalizeActivity(person, 'unknown', totalSeconds),
+      };
+    });
+    return result;
+  }
+
+  function readDateFrom(obj) {
+    if (!obj || typeof obj !== 'object') return '';
+    return obj.updated_at || obj.updatedAt || obj.generated_at || obj.generatedAt || obj.created_at || obj.createdAt || obj.date || '';
+  }
+
+  function formatUpdateDate(value) {
+    if (!value) return '';
+    const dt = new Date(value);
+    if (Number.isNaN(dt.getTime())) return value;
+    return dt.toLocaleString('tr-TR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  }
+
+  function resolveLatestData(raw, camera = activeCamera) {
+    if (!raw || typeof raw !== 'object') return normalizeReport(FALLBACK_DATA);
+
+    const latestBlock =
+      raw.latest ||
+      raw.current ||
+      raw.last ||
+      raw.latest_report ||
+      raw.latestReport ||
+      (raw.data && (raw.data.latest || raw.data.current || raw.data.last)) ||
+      raw.daily ||
+      (raw.periods && raw.periods.daily) ||
+      raw;
+
+    lastUpdatedText = formatUpdateDate(
+      readDateFrom(latestBlock) ||
+      readDateFrom(raw) ||
+      (latestBlock && latestBlock.meta && readDateFrom(latestBlock.meta)) ||
+      (raw.meta && readDateFrom(raw.meta))
+    );
+
+    let block = latestBlock;
+    if (block && block.data && !isReportData(block) && typeof block.data === 'object') {
+      block = block.data;
+    }
+
+    let data;
+    if (camera === 'both') {
+      data = block.merged || block.both || block.BOTH || (block.data && isReportData(block.data) ? block.data : null) || (isReportData(block) ? block : null);
     } else {
-      try {
-        const res = await fetch('http://localhost:8080/cam7_report.json');
-        if (!res.ok) throw new Error('server error');
-        const d = await res.json();
-        raw = { merged: d, CAM7: d, CAM8: {} };
-        document.getElementById('dataSource').textContent = '● Yerel Sunucu';
-        document.getElementById('dataSource').style.color = '#2563EB';
-      } catch(e) {
-        raw = { merged: FALLBACK_DATA };
-        document.getElementById('dataSource').textContent = '● Yerel Veri';
-        document.getElementById('dataSource').style.color = '#D97706';
+      data = block[camera] || (block.cameras && block.cameras[camera]) || block.merged || (isReportData(block) ? block : null);
+    }
+
+    return normalizeReport(data || FALLBACK_DATA);
+  }
+
+  /* ── AWS S3 RAPOR KAYNAĞI (Lambda gerekmez) ── */
+  const S3_REPORTS = 'https://standalyze-2026.s3.eu-central-1.amazonaws.com/reports';
+  let _reportLastMod = null;
+
+  async function fetchReportJson(key) {
+    try {
+      const r = await fetch(`${S3_REPORTS}/${key}?_=${Date.now()}`);
+      if (!r.ok) return null;
+      const lm = r.headers.get('last-modified');   // CORS-safelisted → okunabilir
+      if (lm) _reportLastMod = lm;
+      return await r.json();
+    } catch (e) { return null; }
+  }
+  function mergeReports(...reports) {
+    const out = {};
+    for (const rep of reports) {
+      if (!rep) continue;
+      for (const [name, acts] of Object.entries(rep)) {
+        out[name] = out[name] || {};
+        for (const [act, v] of Object.entries(acts || {})) {
+          const sec = (v && typeof v.seconds === 'number') ? v.seconds
+                    : (typeof v === 'number' ? v : 0);
+          out[name][act] = out[name][act] || { seconds: 0, percent: 0 };
+          out[name][act].seconds += sec;
+        }
       }
     }
-    const data = (raw && raw.merged) ? raw.merged : raw;
+    return out;
+  }
+
+  async function loadData() {
+    const ds = document.getElementById('dataSource');
+    _reportLastMod = null;
+    const [c7, c8] = await Promise.all([
+      fetchReportJson('cam7_report.json'),
+      fetchReportJson('cam8_report.json'),
+    ]);
+
+    let raw;
+    if (c7 || c8) {
+      raw = { latest: {
+        CAM7: c7 || {}, CAM8: c8 || {},
+        merged: mergeReports(c7, c8),
+        date: _reportLastMod,
+      } };
+      ds.textContent = `● AWS Son Güncel (${labelCamera()})`;
+      ds.style.color = '#16A34A';
+    } else {
+      raw = { latest: { merged: FALLBACK_DATA } };
+      ds.textContent = '● Yerel Veri · Son Güncel';
+      ds.style.color = '#D97706';
+    }
+
+    const data = resolveLatestData(raw);
     renderTable(data);
     renderWelcome(data);
   }
@@ -351,7 +462,7 @@
     const names = Object.keys(data);
     document.getElementById('activeCount').textContent = names.length;
     document.getElementById('welcomeDesc').textContent =
-      `Sistemde bugün ${names.length} çalışan analiz edildi, 2 kamera çevrimiçi.`;
+      `Son güncel veride ${names.length} çalışan analiz edildi, 2 kamera çevrimiçi${lastUpdatedText ? ' · Güncelleme: ' + lastUpdatedText : ''}.`;
   }
 
   function renderTable(data) {
