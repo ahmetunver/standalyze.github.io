@@ -846,8 +846,17 @@
           fragLoadingMaxRetry: 8,
         });
         videoEl._hls = hls;
+        hls._isVod = false;
         hls.loadSource(feed.url + '?_=' + Date.now());  // eski playlist cache'lenmesin
         hls.attachMedia(videoEl);
+
+        // İşleme bitince playlist ENDLIST alır → VOD. Yeniden yükleme yapma
+        // (yoksa küçük önizleme videoyu baştan döndürür).
+        hls.on(Hls.Events.LEVEL_LOADED, (e, data) => {
+          if (data && data.details && data.details.live === false) {
+            hls._isVod = true;
+          }
+        });
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
           videoEl.style.display = 'block';   // CSS'te display:none → görünür yap
@@ -857,6 +866,7 @@
 
         hls.on(Hls.Events.ERROR, (e, data) => {
           if (!data.fatal) return;
+          if (hls._isVod) return;            // yayın bitti → başa sarma, dokunma
           if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
             try { hls.recoverMediaError(); } catch (e) {}
             return;

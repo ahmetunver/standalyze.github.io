@@ -375,10 +375,24 @@
 
       videoEl._hls = hls;
       hls._recoverCount = 0;
+      hls._isVod = false;                    // yayın bitti mi (ENDLIST geldi mi)
 
       // Manifesti cache-bust'la (S3/CDN eski playlist'i vermesin)
       hls.loadSource(url + '?_=' + Date.now());
       hls.attachMedia(videoEl);
+
+      // Playlist'e ENDLIST yazıldıysa (işleme bitti) → yayın VOD'a döndü.
+      // Artık yeniden yükleme YAPMA, yoksa video başa sarar.
+      hls.on(Hls.Events.LEVEL_LOADED, (e, data) => {
+        if (data && data.details && data.details.live === false) {
+          hls._isVod = true;
+        }
+      });
+
+      // Video sonuna gelince başa sarma; son karede dursun.
+      videoEl.addEventListener('ended', () => {
+        metaEl.textContent = `${label} · Yayın bitti (kayıt hazır)`;
+      });
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         videoEl.style.display = 'block';     // CSS'te display:none → görünür yap
@@ -397,6 +411,12 @@
 
       hls.on(Hls.Events.ERROR, (e, data) => {
         if (!data.fatal) return;            // ölümcül değilse hls.js kendi halleder
+
+        // Yayın bittiyse (VOD) yeniden yükleme yapma → başa sarmayı önler
+        if (hls._isVod) {
+          metaEl.textContent = `${label} · Yayın bitti (kayıt hazır)`;
+          return;
+        }
 
         // Hata sebebini ekranda göster (teşhis için)
         metaEl.textContent = `${label} · ${data.type} / ${data.details}`;

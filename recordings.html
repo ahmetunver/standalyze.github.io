@@ -423,20 +423,31 @@
       ]);
 
       let list = [];
+      let denied = false;
       for (const [res, camLabel] of [[res7,'CAM7'],[res8,'CAM8']]) {
-        if (!res || !res.ok) continue;
+        if (!res) continue;
+        if (!res.ok) { denied = true; continue; }   // 403 = ListBucket izni yok
         const xml  = await res.text();
         const parser = new DOMParser();
         const doc  = parser.parseFromString(xml, 'text/xml');
-        const keys = [...doc.querySelectorAll('Contents Key')];
-        for (const keyEl of keys) {
+        // S3 AccessDenied/Error kontrolü (ListBucket izni yoksa burası dolar)
+        const errCode = doc.getElementsByTagName('Code')[0];
+        if (errCode) {
+          throw new Error('S3 listeleme reddedildi: ' + errCode.textContent);
+        }
+        // getElementsByTagName namespace'i yok sayar.
+        // (querySelector, S3 XML namespace'i yüzünden eşleşmiyordu → kayıtlar görünmüyordu)
+        const contentsList = [...doc.getElementsByTagName('Contents')];
+        for (const c of contentsList) {
+          const keyEl = c.getElementsByTagName('Key')[0];
+          if (!keyEl) continue;
           const key = keyEl.textContent;
           if (!key.endsWith('.mp4')) continue;
           const parts    = key.split('/');
           const filename = parts[parts.length - 1];
           const dateMatch = filename.match(/(\d{4}-\d{2}-\d{2})/);
           const date = dateMatch ? dateMatch[1] : '—';
-          const sizeEl = keyEl.parentElement?.querySelector('Size');
+          const sizeEl = c.getElementsByTagName('Size')[0];
           const sizeMB = sizeEl ? (parseInt(sizeEl.textContent) / 1024 / 1024).toFixed(0) + ' MB' : '—';
           list.push({
             id:   list.length + 1,
@@ -460,11 +471,16 @@
 
       if (list.length === 0) {
         document.getElementById('recInfoMsg').style.display = 'flex';
-        document.getElementById('recInfoMsg').textContent = 'Henüz kayıt yok. cam_unified.py çalışınca buraya eklenir.';
+        document.getElementById('recInfoMsg').textContent = denied
+          ? 'S3 listeleme reddedildi (403). Bucket policy\'ye s3:ListBucket izni eklenmeli.'
+          : 'Henüz kayıt yok. cam_unified.py çalışınca buraya eklenir.';
       }
 
     } catch(e) {
-      document.getElementById('recInfoMsg').textContent = 'Kayıtlar yüklenemedi. S3 CORS ayarını kontrol et.';
+      const box = document.getElementById('recInfoMsg');
+      box.style.display = 'flex';
+      box.textContent = 'Kayıtlar yüklenemedi: ' + (e && e.message ? e.message : e) +
+        ' — bucket policy\'de s3:ListBucket izni ve CORS ayarını kontrol et.';
       console.error(e);
     }
   }
@@ -548,125 +564,6 @@
 
   loadRecordingsFromS3();
 </script>
-  <script>
-    function logout() { sessionStorage.clear(); window.location.replace('index.html'); }
-    document.querySelectorAll('.user-card').forEach(function (el) {
-      el.style.cursor = 'pointer';
-      el.title = 'Çıkış Yap';
-      el.addEventListener('click', logout);
-    });
-  </script>
-</body>
-    {
-      id: 1,
-      name: 'Çalışma Alanı 1 — Kayıt',
-      cam: 'Çalışma Alanı 1',
-      date: '14 Nisan 2026',
-      duration: '--:--',
-      size: 'S3 bekleniyor',
-      src: '', // TODO: S3 URL buraya
-    },
-    {
-      id: 2,
-      name: 'Çalışma Alanı 2 — Kayıt',
-      cam: 'Çalışma Alanı 2',
-      date: '14 Nisan 2026',
-      duration: '--:--',
-      size: 'S3 bekleniyor',
-      src: '', // TODO: S3 URL buraya
-    },
-  ];
-
-  let activeId = null;
-  const video = document.getElementById('videoPlayer');
-
-  function renderList() {
-    const list = document.getElementById('recList');
-    list.innerHTML = recordings.map(r => `
-      <div class="rec-item ${activeId === r.id ? 'active' : ''}" onclick="selectRec(${r.id})">
-        <div class="rec-thumb">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14"/><rect x="1" y="6" width="15" height="12" rx="2"/></svg>
-          <span class="dur">${r.duration}</span>
-        </div>
-        <div class="rec-info">
-          <div class="rec-name">${r.name}</div>
-          <div class="rec-meta">${r.date} · ${r.size}</div>
-        </div>
-        <span class="rec-cam">CAM${r.id}</span>
-      </div>
-    `).join('');
-  }
-
-  function selectRec(id) {
-    activeId = id;
-    const rec = recordings.find(r => r.id === id);
-    document.getElementById('playerTitle').textContent = rec.name;
-    document.getElementById('playerCam').textContent = rec.cam;
-    document.getElementById('overlayTag').textContent = rec.cam;
-
-    if (rec.src) {
-      video.src = rec.src;
-      video.style.display = 'block';
-      document.getElementById('videoPlaceholder').style.display = 'none';
-      video.load();
-    } else {
-      // demo: no video yet
-      video.style.display = 'none';
-      document.getElementById('videoPlaceholder').innerHTML = `
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="48" height="48"><path d="M15 10l4.553-2.069A1 1 0 0121 8.87v6.26a1 1 0 01-1.447.894L15 14"/><rect x="1" y="6" width="15" height="12" rx="2"/></svg>
-        <p style="color:rgba(255,255,255,0.5);font-size:12px">${rec.cam}</p>
-        <p style="color:rgba(255,255,255,0.25);font-size:11px;margin-top:4px">Video S3'e yüklenmesi bekleniyor</p>
-      `;
-    }
-    renderList();
-  }
-
-  function togglePlay() {
-    if (!video.src) return;
-    if (video.paused) {
-      video.play();
-      document.getElementById('ctrlPlayIcon').innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
-    } else {
-      video.pause();
-      document.getElementById('ctrlPlayIcon').innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>';
-    }
-  }
-
-  function skipBack() { if (video.src) video.currentTime = Math.max(0, video.currentTime - 10); }
-  function skipFwd()  { if (video.src) video.currentTime = Math.min(video.duration, video.currentTime + 10); }
-  function setVol(v)  { video.volume = v; }
-
-  function seek(e) {
-    if (!video.src || !video.duration) return;
-    const bar = document.getElementById('progressBar');
-    const pct = e.offsetX / bar.offsetWidth;
-    video.currentTime = pct * video.duration;
-  }
-
-  function fmtTime(s) {
-    if (isNaN(s)) return '0:00';
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${m}:${sec.toString().padStart(2,'0')}`;
-  }
-
-  video.addEventListener('timeupdate', () => {
-    const pct = video.duration ? (video.currentTime / video.duration * 100) : 0;
-    document.getElementById('progressFill').style.width = pct + '%';
-    document.getElementById('timeCurrent').textContent = fmtTime(video.currentTime);
-  });
-
-  video.addEventListener('loadedmetadata', () => {
-    document.getElementById('timeDuration').textContent = fmtTime(video.duration);
-  });
-
-  video.addEventListener('ended', () => {
-    document.getElementById('ctrlPlayIcon').innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>';
-  });
-
-  renderList();
-</script>
-  <!-- ÇIKIŞ: kullanıcı kartına tıklayınca oturum kapanır -->
   <script>
     function logout() { sessionStorage.clear(); window.location.replace('index.html'); }
     document.querySelectorAll('.user-card').forEach(function (el) {
