@@ -465,13 +465,15 @@
       list.sort((a,b) => b.date.localeCompare(a.date));
       recordings = list;
 
-      document.getElementById('recInfoMsg').style.display = 'none';
-      document.getElementById('listCount').textContent = `${list.length} kayıt`;
+      const infoBox = document.getElementById('recInfoMsg');
+      if (infoBox) infoBox.style.display = 'none';
+      const lc = document.getElementById('listCount');   // bu öğe HTML'de olmayabilir
+      if (lc) lc.textContent = `${list.length} kayıt`;
       renderList();
 
-      if (list.length === 0) {
-        document.getElementById('recInfoMsg').style.display = 'flex';
-        document.getElementById('recInfoMsg').textContent = denied
+      if (list.length === 0 && infoBox) {
+        infoBox.style.display = 'flex';
+        infoBox.textContent = denied
           ? 'S3 listeleme reddedildi (403). Bucket policy\'ye s3:ListBucket izni eklenmeli.'
           : 'Henüz kayıt yok. cam_unified.py çalışınca buraya eklenir.';
       }
