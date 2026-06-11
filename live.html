@@ -332,24 +332,6 @@
       ' <a href="http://localhost:5000" target="_blank">Kontrol panelini aç →</a>';
   }
 
-  async function ctlStart(preset, btn) {
-    const info = document.getElementById('ctlInfo');
-    btn.disabled = true;
-    try {
-      const r = await fetch(CONTROL + '/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ preset }),
-      });
-      const j = await r.json();
-      info.textContent = j.message;
-      info.className = 'ctl-info ' + (j.ok ? 'ok' : 'warn');
-    } catch (e) {
-      fallbackLink('⛔ Localhost\'a ulaşılamadı (sunucu kapalı ya da tarayıcı engelledi).');
-    } finally {
-      setTimeout(refreshCtl, 800);
-    }
-  }
 
   async function refreshCtl() {
     const dot = document.getElementById('ctlServerDot');
