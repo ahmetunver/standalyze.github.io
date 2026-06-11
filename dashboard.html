@@ -834,6 +834,8 @@
     function start(feed) {
       const videoEl = document.getElementById(feed.id);
       if (!videoEl) return;
+      if (videoEl._finished) return;       // bitmiş yayını bir daha başlatma (başa sarmaz)
+      videoEl.loop = false;
 
       // Eski örneği temizle
       if (videoEl._hls) { try { videoEl._hls.destroy(); } catch (e) {} videoEl._hls = null; }
@@ -847,18 +849,25 @@
         });
         videoEl._hls = hls;
         hls._isVod = false;
+        videoEl._started = false;          // akış hiç oynadı mı
         hls.loadSource(feed.url + '?_=' + Date.now());  // eski playlist cache'lenmesin
         hls.attachMedia(videoEl);
 
-        // İşleme bitince playlist ENDLIST alır → VOD. Yeniden yükleme yapma
-        // (yoksa küçük önizleme videoyu baştan döndürür).
-        hls.on(Hls.Events.LEVEL_LOADED, (e, data) => {
-          if (data && data.details && data.details.live === false) {
-            hls._isVod = true;
-          }
+        // İşleme bitince playlist ENDLIST alır → VOD.
+        const markVod = (e, data) => {
+          if (data && data.details && data.details.live === false) hls._isVod = true;
+        };
+        hls.on(Hls.Events.LEVEL_LOADED, markVod);
+        hls.on(Hls.Events.LEVEL_UPDATED, markVod);
+
+        // Bitince dondur, BAŞA SARMA.
+        videoEl.addEventListener('ended', () => {
+          videoEl._finished = true;
+          try { hls.stopLoad(); } catch (e) {}
         });
 
         hls.on(Hls.Events.MANIFEST_PARSED, () => {
+          videoEl._started = true;
           videoEl.style.display = 'block';   // CSS'te display:none → görünür yap
           const p = videoEl.play();
           if (p) p.catch(() => {});
@@ -866,27 +875,36 @@
 
         hls.on(Hls.Events.ERROR, (e, data) => {
           if (!data.fatal) return;
-          if (hls._isVod) return;            // yayın bitti → başa sarma, dokunma
+          // Yayın bitti → kesinlikle yeniden yükleme yok (başa sarmaz)
+          if (hls._isVod || videoEl._finished) { try { hls.stopLoad(); } catch (e) {} return; }
+
           if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
             try { hls.recoverMediaError(); } catch (e) {}
             return;
           }
-          // Yayın yok / erişilemiyor (örn. o kamera çalışmıyor) →
-          // videoyu gizle, placeholder gradyan kalsın, sonra tekrar dene
-          videoEl.style.display = 'none';
-          try { hls.destroy(); } catch (e) {}
-          videoEl._hls = null;
-          setTimeout(() => start(feed), 12000);
+          if (videoEl._started) {
+            // Daha önce oynadıysa: konumu KORUYARAK devam et (başa sarmaz)
+            setTimeout(() => { try { hls.startLoad(); } catch (e) {} }, 3000);
+          } else {
+            // Hiç oynamadıysa (kamera çevrimdışı) → placeholder kalsın, tekrar dene
+            videoEl.style.display = 'none';
+            try { hls.destroy(); } catch (e) {}
+            videoEl._hls = null;
+            setTimeout(() => start(feed), 12000);
+          }
         });
       } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
         // Safari
         videoEl.src = feed.url + '?_=' + Date.now();
         videoEl.addEventListener('loadedmetadata', () => {
+          videoEl._started = true;
           videoEl.style.display = 'block';
           const p = videoEl.play();
           if (p) p.catch(() => {});
         });
+        videoEl.addEventListener('ended', () => { videoEl._finished = true; });
         videoEl.addEventListener('error', () => {
+          if (videoEl._finished || videoEl._started) return;  // bitmiş/oynamışsa dokunma
           videoEl.style.display = 'none';
           setTimeout(() => start(feed), 12000);
         });

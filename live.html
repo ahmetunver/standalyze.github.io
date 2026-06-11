@@ -352,6 +352,10 @@
   // Canlı yayın işlenirken üretildiği için: az segmentle başlamaya
   // toleranslı, hatadan kendini toparlayan, sebebi ekrana yazan sürüm.
   function loadStream(videoEl, noSignalEl, metaEl, url, label) {
+    // Yayın bitmişse bir daha asla baştan yükleme (başa sarmayı kökten önler)
+    if (videoEl._finished) return;
+    videoEl.loop = false;
+
     // Eski hls örneğini temizle (yeniden yükleme durumunda)
     if (videoEl._hls) {
       try { videoEl._hls.destroy(); } catch (e) {}
@@ -360,11 +364,9 @@
 
     if (Hls.isSupported()) {
       const hls = new Hls({
-        // Canlı kenar ayarları — yayın başında 1 segmentle başlayabilsin
         liveSyncDurationCount: 1,
         liveMaxLatencyDurationCount: 10,
         lowLatencyMode: false,
-        // Segment/manifest yükleme denemelerini artır (yavaş üretime tolerans)
         manifestLoadingMaxRetry: 12,
         manifestLoadingRetryDelay: 2000,
         levelLoadingMaxRetry: 12,
@@ -374,35 +376,33 @@
       });
 
       videoEl._hls = hls;
-      hls._recoverCount = 0;
       hls._isVod = false;                    // yayın bitti mi (ENDLIST geldi mi)
 
-      // Manifesti cache-bust'la (S3/CDN eski playlist'i vermesin)
       hls.loadSource(url + '?_=' + Date.now());
       hls.attachMedia(videoEl);
 
       // Playlist'e ENDLIST yazıldıysa (işleme bitti) → yayın VOD'a döndü.
-      // Artık yeniden yükleme YAPMA, yoksa video başa sarar.
-      hls.on(Hls.Events.LEVEL_LOADED, (e, data) => {
-        if (data && data.details && data.details.live === false) {
-          hls._isVod = true;
-        }
-      });
+      const markVod = (e, data) => {
+        if (data && data.details && data.details.live === false) hls._isVod = true;
+      };
+      hls.on(Hls.Events.LEVEL_LOADED, markVod);
+      hls.on(Hls.Events.LEVEL_UPDATED, markVod);
 
-      // Video sonuna gelince başa sarma; son karede dursun.
+      // Video sonuna gelince: dondur, daha fazla segment çekme, BAŞA SARMA.
       videoEl.addEventListener('ended', () => {
+        videoEl._finished = true;
+        try { hls.stopLoad(); } catch (e) {}
         metaEl.textContent = `${label} · Yayın bitti (kayıt hazır)`;
       });
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         videoEl.style.display = 'block';     // CSS'te display:none → görünür yap
         const p = videoEl.play();
-        if (p) p.catch(() => {});           // autoplay engellenirse sessiz geç
+        if (p) p.catch(() => {});
         noSignalEl.style.display = 'none';
         metaEl.textContent = `${label} · HLS Canlı`;
       });
 
-      // İlk frame gerçekten ekrana geldiğinde
       videoEl.addEventListener('playing', () => {
         videoEl.style.display = 'block';
         noSignalEl.style.display = 'none';
@@ -410,50 +410,43 @@
       });
 
       hls.on(Hls.Events.ERROR, (e, data) => {
-        if (!data.fatal) return;            // ölümcül değilse hls.js kendi halleder
+        if (!data.fatal) return;             // ölümcül değilse hls.js kendi halleder
 
-        // Yayın bittiyse (VOD) yeniden yükleme yapma → başa sarmayı önler
-        if (hls._isVod) {
+        // Yayın bitti/bitiyor → KESİNLİKLE yeniden yükleme yok (başa sarmaz)
+        if (hls._isVod || videoEl._finished) {
           metaEl.textContent = `${label} · Yayın bitti (kayıt hazır)`;
+          try { hls.stopLoad(); } catch (e) {}
           return;
         }
 
-        // Hata sebebini ekranda göster (teşhis için)
         metaEl.textContent = `${label} · ${data.type} / ${data.details}`;
 
-        switch (data.type) {
-          case Hls.ErrorTypes.NETWORK_ERROR:
-            // Segment/manifest henüz yok → yıkma, yüklemeyi yeniden başlat
-            noSignalEl.style.display = 'flex';
-            setTimeout(() => { try { hls.startLoad(); } catch (e) {} }, 3000);
-            break;
-          case Hls.ErrorTypes.MEDIA_ERROR:
-            // Çözme/buffer hatası → medya kurtarma
-            try { hls.recoverMediaError(); } catch (e) {}
-            break;
-          default:
-            // Diğer ölümcül hatalar → en fazla birkaç kez tam yeniden kur
-            hls._recoverCount++;
-            noSignalEl.style.display = 'flex';
-            if (hls._recoverCount <= 5) {
-              setTimeout(() => loadStream(videoEl, noSignalEl, metaEl, url, label), 5000);
-            } else {
-              metaEl.textContent = `${label} · Akış bekleniyor (${data.details})`;
-              setTimeout(() => loadStream(videoEl, noSignalEl, metaEl, url, label), 15000);
-            }
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
+          // Çözme/buffer hatası → konum korunur
+          try { hls.recoverMediaError(); } catch (e) {}
+        } else {
+          // Ağ/diğer hatalar → konumu KORUYARAK devam et (loadStream YOK → başa sarmaz)
+          noSignalEl.style.display = 'flex';
+          setTimeout(() => { try { hls.startLoad(); } catch (e) {} }, 3000);
         }
       });
+
     } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
-      // Safari (yerleşik HLS)
+      // Safari (yerleşik HLS) — VOD'u kendi düzgün yönetir, döngü yapmaz
       videoEl.src = url + '?_=' + Date.now();
       videoEl.addEventListener('loadedmetadata', () => {
-        videoEl.style.display = 'block';     // Safari'de de görünür yap
+        videoEl.style.display = 'block';
         const p = videoEl.play();
         if (p) p.catch(() => {});
         noSignalEl.style.display = 'none';
         metaEl.textContent = `${label} · HLS Canlı`;
       });
+      videoEl.addEventListener('ended', () => {
+        videoEl._finished = true;
+        metaEl.textContent = `${label} · Yayın bitti (kayıt hazır)`;
+      });
       videoEl.addEventListener('error', () => {
+        if (videoEl._finished) return;       // bitmişse dokunma
         noSignalEl.style.display = 'flex';
         metaEl.textContent = `${label} · Akış bekleniyor`;
         setTimeout(() => loadStream(videoEl, noSignalEl, metaEl, url, label), 10000);
