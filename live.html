@@ -99,10 +99,7 @@
           font-weight:700;color:#fff;font-family:inherit;transition:transform .15s,opacity .2s,box-shadow .2s;}
         .ctl-btn:hover:not(:disabled){transform:translateY(-2px);}
         .ctl-btn:disabled{opacity:.45;cursor:not-allowed;transform:none;}
-        .ctl-btn.c7{background:linear-gradient(135deg,#7060D0,#5E87D4);box-shadow:0 4px 16px rgba(112,96,208,.35);}
-        .ctl-btn.c8{background:linear-gradient(135deg,#5E87D4,#38B882);box-shadow:0 4px 16px rgba(94,135,212,.35);}
         .ctl-btn.both{background:linear-gradient(135deg,#7060D0,#38B882);box-shadow:0 4px 16px rgba(112,96,208,.30);}
-        .ctl-btn.kisa{background:linear-gradient(135deg,#8B72D8,#D06080);box-shadow:0 4px 16px rgba(208,96,128,.30);}
         .ctl-info{margin-top:12px;font-size:13px;font-weight:600;min-height:18px;}
         .ctl-info.ok{color:#207858;} .ctl-info.warn{color:#B07000;} .ctl-info.err{color:#C03050;}
         .ctl-info a{color:#7060D0;font-weight:700;text-decoration:underline;cursor:pointer;}
@@ -325,13 +322,25 @@
   // ── KAMERA KONTROL (arka plandaki control_server.py'ye doğrudan istek) ──
   const CONTROL = 'http://localhost:5000';
 
-  function fallbackLink(msg) {
+  async function ctlStart(preset, btn) {
     const info = document.getElementById('ctlInfo');
-    info.className = 'ctl-info err';
-    info.innerHTML = msg +
-      ' <a href="http://localhost:5000" target="_blank">Kontrol panelini aç →</a>';
+    btn.disabled = true;
+    try {
+      const r = await fetch(CONTROL + '/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preset }),
+      });
+      const j = await r.json();
+      info.textContent = j.message;
+      info.className = 'ctl-info ' + (j.ok ? 'ok' : 'warn');
+    } catch (e) {
+      // Hata alındığında ekrana uyarı basmak yerine doğrudan yeni sekmede localhost panelini açar
+      window.open(CONTROL, '_blank');
+    } finally {
+      setTimeout(refreshCtl, 800);
+    }
   }
-
 
   async function refreshCtl() {
     const dot = document.getElementById('ctlServerDot');
