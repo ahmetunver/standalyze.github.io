@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html lang="tr">
 <head>
-  <!-- ERİŞİM KORUMASI: yalnızca admin olarak giriş yapanlar görebilir -->
   <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.16/dist/amazon-cognito-identity.min.js"></script>
   <script src="auth.js"></script>
   <script>Auth.requireAuth('admin');</script>
@@ -9,13 +8,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Standalyze — Canlı Kamera</title>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="app.css" />
+  <link rel="stylesheet" href="app.css" />
 
 </head>
 <body class="page-live">
 <div class="app">
 
-  <!-- SIDEBAR -->
   <aside class="sidebar">
     <div class="sidebar-top">
       <div class="brand">
@@ -65,7 +63,6 @@
     </div>
   </aside>
 
-  <!-- MAIN -->
   <div class="main">
     <div class="topbar">
       <div class="topbar-title">Canlı Kamera</div>
@@ -89,7 +86,6 @@
         </div>
       </div>
 
-      <!-- ── KAMERA KONTROL PANELİ ── -->
       <style>
         .ctl-panel{background:#fff;border:1px solid #ECE9F8;border-radius:16px;
           padding:18px 20px;margin-bottom:20px;box-shadow:0 2px 12px rgba(60,40,140,.05);}
@@ -117,22 +113,16 @@
           <div class="ctl-server" id="ctlServerDot">● kontrol ediliyor…</div>
         </div>
         <div class="ctl-btns">
-          <button class="ctl-btn c7"   id="btnCam7" onclick="ctlStart('cam7', this)">CAM7 Başlat</button>
-          <button class="ctl-btn c8"   id="btnCam8" onclick="ctlStart('cam8', this)">CAM8 Başlat</button>
-          <button class="ctl-btn both" id="btnBoth" onclick="ctlStart('both', this)">İkisini Başlat</button>
-          <button class="ctl-btn kisa" id="btnKisa" onclick="ctlStart('kisa', this)">Kısa Test (CAM7)</button>
+          <button class="ctl-btn both" id="btnStartRecordings" onclick="ctlStart('both', this)">Kamera Kayıtlarını Başlat</button>
         </div>
-        <div class="ctl-info" id="ctlInfo">İşlemek istediğin kamerayı seç.</div>
+        <div class="ctl-info" id="ctlInfo">Kayıt işlemini başlatmak için butona tıklayın.</div>
       </div>
 
-      <!-- Camera Grid -->
       <div class="cam-grid">
 
-        <!-- CAM 1 — CAM7 -->
         <div class="cam-card" id="cam1card">
           <div class="cam-feed-wrap">
             <div class="cam-feed-bg cam1-bg"></div>
-            <!-- HLS stream: cam_unified.py çalışınca S3'e yüklenen .m3u8 dosyası -->
             <video class="cam-video" id="cam1video" autoplay muted playsinline></video>
             <div class="cam-overlay">
               <div class="cam-top">
@@ -164,7 +154,6 @@
           </div>
         </div>
 
-        <!-- CAM 2 — CAM8 -->
         <div class="cam-card" id="cam2card">
           <div class="cam-feed-wrap">
             <div class="cam-feed-bg cam2-bg"></div>
@@ -201,7 +190,6 @@
 
       </div>
 
-      <!-- Info -->
       <div class="info-box">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
         <p id="streamInfo">cam_unified.py çalışınca stream otomatik başlar. Akış yokken demo modu aktiftir.</p>
@@ -230,14 +218,10 @@
   updateClocks();
   setInterval(updateClocks, 1000);
 
-  // Canlı yayın işlenirken üretildiği için: az segmentle başlamaya
-  // toleranslı, hatadan kendini toparlayan, sebebi ekrana yazan sürüm.
   function loadStream(videoEl, noSignalEl, metaEl, url, label) {
-    // Yayın bitmişse bir daha asla baştan yükleme (başa sarmayı kökten önler)
     if (videoEl._finished) return;
     videoEl.loop = false;
 
-    // Eski hls örneğini temizle (yeniden yükleme durumunda)
     if (videoEl._hls) {
       try { videoEl._hls.destroy(); } catch (e) {}
       videoEl._hls = null;
@@ -257,19 +241,17 @@
       });
 
       videoEl._hls = hls;
-      hls._isVod = false;                    // yayın bitti mi (ENDLIST geldi mi)
+      hls._isVod = false;
 
       hls.loadSource(url + '?_=' + Date.now());
       hls.attachMedia(videoEl);
 
-      // Playlist'e ENDLIST yazıldıysa (işleme bitti) → yayın VOD'a döndü.
       const markVod = (e, data) => {
         if (data && data.details && data.details.live === false) hls._isVod = true;
       };
       hls.on(Hls.Events.LEVEL_LOADED, markVod);
       hls.on(Hls.Events.LEVEL_UPDATED, markVod);
 
-      // Video sonuna gelince: dondur, daha fazla segment çekme, BAŞA SARMA.
       videoEl.addEventListener('ended', () => {
         videoEl._finished = true;
         try { hls.stopLoad(); } catch (e) {}
@@ -277,7 +259,7 @@
       });
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        videoEl.style.display = 'block';     // CSS'te display:none → görünür yap
+        videoEl.style.display = 'block';
         const p = videoEl.play();
         if (p) p.catch(() => {});
         noSignalEl.style.display = 'none';
@@ -291,9 +273,8 @@
       });
 
       hls.on(Hls.Events.ERROR, (e, data) => {
-        if (!data.fatal) return;             // ölümcül değilse hls.js kendi halleder
+        if (!data.fatal) return;
 
-        // Yayın bitti/bitiyor → KESİNLİKLE yeniden yükleme yok (başa sarmaz)
         if (hls._isVod || videoEl._finished) {
           metaEl.textContent = `${label} · Yayın bitti (kayıt hazır)`;
           try { hls.stopLoad(); } catch (e) {}
@@ -303,17 +284,14 @@
         metaEl.textContent = `${label} · ${data.type} / ${data.details}`;
 
         if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-          // Çözme/buffer hatası → konum korunur
           try { hls.recoverMediaError(); } catch (e) {}
         } else {
-          // Ağ/diğer hatalar → konumu KORUYARAK devam et (loadStream YOK → başa sarmaz)
           noSignalEl.style.display = 'flex';
           setTimeout(() => { try { hls.startLoad(); } catch (e) {} }, 3000);
         }
       });
 
     } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
-      // Safari (yerleşik HLS) — VOD'u kendi düzgün yönetir, döngü yapmaz
       videoEl.src = url + '?_=' + Date.now();
       videoEl.addEventListener('loadedmetadata', () => {
         videoEl.style.display = 'block';
@@ -327,7 +305,7 @@
         metaEl.textContent = `${label} · Yayın bitti (kayıt hazır)`;
       });
       videoEl.addEventListener('error', () => {
-        if (videoEl._finished) return;       // bitmişse dokunma
+        if (videoEl._finished) return;
         noSignalEl.style.display = 'flex';
         metaEl.textContent = `${label} · Akış bekleniyor`;
         setTimeout(() => loadStream(videoEl, noSignalEl, metaEl, url, label), 10000);
@@ -347,7 +325,6 @@
   // ── KAMERA KONTROL (arka plandaki control_server.py'ye doğrudan istek) ──
   const CONTROL = 'http://localhost:5000';
 
-  // Tarayıcı localhost'u engellerse gösterilecek yedek bağlantı
   function fallbackLink(msg) {
     const info = document.getElementById('ctlInfo');
     info.className = 'ctl-info err';
@@ -365,10 +342,9 @@
         body: JSON.stringify({ preset }),
       });
       const j = await r.json();
-      info.textContent = j.message;                 // başarı ya da "zaten çalışıyor" uyarısı
+      info.textContent = j.message;
       info.className = 'ctl-info ' + (j.ok ? 'ok' : 'warn');
     } catch (e) {
-      // Sunucu kapalı VEYA tarayıcı (Brave) localhost erişimini engelledi
       fallbackLink('⛔ Localhost\'a ulaşılamadı (sunucu kapalı ya da tarayıcı engelledi).');
     } finally {
       setTimeout(refreshCtl, 800);
@@ -382,14 +358,15 @@
       const r = await fetch(CONTROL + '/status');
       running = (await r.json()).running || {};
     } catch (e) {
-      running = null;                               // sunucu kapalı / engellendi
+      running = null;
     }
 
     if (running === null) {
       dot.textContent = '● Kontrol sunucusu kapalı/engelli';
       dot.style.color = '#C03050';
-      ['btnCam7','btnCam8','btnBoth','btnKisa'].forEach(id =>
-        document.getElementById(id).disabled = false);
+      if (document.getElementById('btnStartRecordings')) {
+          document.getElementById('btnStartRecordings').disabled = false;
+      }
       return;
     }
 
@@ -397,10 +374,10 @@
     dot.style.color = '#16A34A';
 
     const cam7on = !!running.CAM7, cam8on = !!running.CAM8;
-    document.getElementById('btnCam7').disabled = cam7on;
-    document.getElementById('btnCam8').disabled = cam8on;
-    document.getElementById('btnKisa').disabled = cam7on;          // kisa = CAM7 slotu
-    document.getElementById('btnBoth').disabled = cam7on || cam8on;
+    
+    if (document.getElementById('btnStartRecordings')) {
+        document.getElementById('btnStartRecordings').disabled = cam7on || cam8on;
+    }
 
     const parts = [];
     if (cam7on) parts.push('CAM7 çalışıyor');
@@ -416,13 +393,13 @@
   setInterval(refreshCtl, 4000);
 
 </script>
-  <script>
-    function logout() { Auth.logout(); }
-    document.querySelectorAll('.user-card').forEach(function (el) {
-      el.style.cursor = 'pointer';
-      el.title = 'Çıkış Yap';
-      el.addEventListener('click', logout);
-    });
-  </script>
+<script>
+  function logout() { Auth.logout(); }
+  document.querySelectorAll('.user-card').forEach(function (el) {
+    el.style.cursor = 'pointer';
+    el.title = 'Çıkış Yap';
+    el.addEventListener('click', logout);
+  });
+</script>
 </body>
 </html>
