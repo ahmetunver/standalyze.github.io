@@ -109,11 +109,12 @@
         .ctl-btn.kisa{background:linear-gradient(135deg,#8B72D8,#D06080);box-shadow:0 4px 16px rgba(208,96,128,.30);}
         .ctl-info{margin-top:12px;font-size:13px;font-weight:600;min-height:18px;}
         .ctl-info.ok{color:#207858;} .ctl-info.warn{color:#B07000;} .ctl-info.err{color:#C03050;}
+        .ctl-info a{color:#7060D0;font-weight:700;text-decoration:underline;cursor:pointer;}
       </style>
       <div class="ctl-panel">
         <div class="ctl-head">
           <div class="ctl-title">Kamera İşlemeyi Başlat</div>
-          <div class="ctl-server" id="ctlServerDot">● Kontrol sunucusu kontrol ediliyor…</div>
+          <div class="ctl-server" id="ctlServerDot">● kontrol ediliyor…</div>
         </div>
         <div class="ctl-btns">
           <button class="ctl-btn c7"   id="btnCam7" onclick="ctlStart('cam7', this)">CAM7 Başlat</button>
@@ -343,9 +344,16 @@
   }
   function goRecordings() { window.location.href = 'recordings.html'; }
 
-  // ── KAMERA KONTROL PANELİ ──────────────────────────────────────────
-  // Yerel kontrol sunucusu (control_server.py) işlemi başlatır.
+  // ── KAMERA KONTROL (arka plandaki control_server.py'ye doğrudan istek) ──
   const CONTROL = 'http://localhost:5000';
+
+  // Tarayıcı localhost'u engellerse gösterilecek yedek bağlantı
+  function fallbackLink(msg) {
+    const info = document.getElementById('ctlInfo');
+    info.className = 'ctl-info err';
+    info.innerHTML = msg +
+      ' <a href="http://localhost:5000" target="_blank">Kontrol panelini aç →</a>';
+  }
 
   async function ctlStart(preset, btn) {
     const info = document.getElementById('ctlInfo');
@@ -360,10 +368,10 @@
       info.textContent = j.message;                 // başarı ya da "zaten çalışıyor" uyarısı
       info.className = 'ctl-info ' + (j.ok ? 'ok' : 'warn');
     } catch (e) {
-      info.textContent = '⛔ Kontrol sunucusuna ulaşılamadı. Makinede "python control_server.py" çalışıyor mu?';
-      info.className = 'ctl-info err';
+      // Sunucu kapalı VEYA tarayıcı (Brave) localhost erişimini engelledi
+      fallbackLink('⛔ Localhost\'a ulaşılamadı (sunucu kapalı ya da tarayıcı engelledi).');
     } finally {
-      setTimeout(refreshCtl, 800);                  // durum güncellensin (butonlar kilitlensin)
+      setTimeout(refreshCtl, 800);
     }
   }
 
@@ -374,13 +382,12 @@
       const r = await fetch(CONTROL + '/status');
       running = (await r.json()).running || {};
     } catch (e) {
-      running = null;                               // sunucu kapalı
+      running = null;                               // sunucu kapalı / engellendi
     }
 
     if (running === null) {
-      dot.textContent = '● Kontrol sunucusu kapalı';
+      dot.textContent = '● Kontrol sunucusu kapalı/engelli';
       dot.style.color = '#C03050';
-      // Sunucu kapalıyken butonlar pasif değil — denemesine izin ver (net hata gösterir)
       ['btnCam7','btnCam8','btnBoth','btnKisa'].forEach(id =>
         document.getElementById(id).disabled = false);
       return;
