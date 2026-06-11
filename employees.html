@@ -2,13 +2,9 @@
 <html lang="tr">
 <head>
   <!-- ERİŞİM KORUMASI: yalnızca admin olarak giriş yapanlar görebilir -->
-  <script>
-    (function () {
-      if (sessionStorage.getItem('role') !== 'admin') {
-        window.location.replace('index.html');
-      }
-    })();
-  </script>
+  <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.16/dist/amazon-cognito-identity.min.js"></script>
+  <script src="auth.js"></script>
+  <script>Auth.requireAuth('admin');</script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Standalyze — Çalışan Listesi</title>
@@ -453,7 +449,11 @@
     <div class="modal-body">
       <div class="form-field">
         <label>İsim *</label>
-        <input id="newName" type="text" placeholder="örn. Ahmet" autocomplete="off" />
+        <input id="newName" type="text" placeholder="örn. ahmet" autocomplete="off" />
+      </div>
+      <div class="form-field">
+        <label>E-posta * <span style="font-weight:400;color:#8B85A8">(giriş hesabı için)</span></label>
+        <input id="newEmail" type="email" placeholder="ahmet@firma.com" autocomplete="off" />
       </div>
       <div class="form-field">
         <label>Görev / Alan</label>
@@ -699,13 +699,19 @@
 
   function clampPct(v) { let n = parseFloat(v) || 0; if (n < 0) n = 0; if (n > 100) n = 100; return +n.toFixed(1); }
 
-  function saveNewEmployee() {
-    const name = document.getElementById('newName').value.trim();
-    const area = document.getElementById('newArea').value.trim();
-    const note = document.getElementById('addNote');
-    const show = (m, ok) => { note.textContent = m; note.className = 'add-note ' + (ok ? 'ok' : 'err'); };
+  // Cognito kullanıcı oluşturma endpoint'i (API Gateway + Lambda)
+  const CREATE_USER_URL = `${API_URL}/create-user`;
+
+  async function saveNewEmployee() {
+    const name  = document.getElementById('newName').value.trim();
+    const email = document.getElementById('newEmail').value.trim();
+    const area  = document.getElementById('newArea').value.trim();
+    const note  = document.getElementById('addNote');
+    const show  = (m, ok) => { note.textContent = m; note.className = 'add-note ' + (ok ? 'ok' : 'err'); };
 
     if (!name) return show('İsim zorunludur.', false);
+    if (/\s/.test(name)) return show('Kullanıcı adı boşluk içeremez (tek kelime yazın).', false);
+    if (!email) return show('E-posta zorunludur (giriş hesabı için).', false);
     if (allEmployees.some(e => e.name.toLowerCase() === name.toLowerCase()))
       return show('Bu isimde bir çalışan zaten var.', false);
 
@@ -715,21 +721,42 @@
     const sum = +(sp + wp + stp).toFixed(1);
     if (sum > 100) return show('Yüzdelerin toplamı 100\'ü geçemez.', false);
 
+    // 1) Cognito hesabını oluştur (sunucu tarafı / Lambda)
+    show('Hesap oluşturuluyor…', true);
+    let tempPassword;
+    try {
+      const token = await Auth.idToken();                 // admin'in giriş token'ı
+      const res = await fetch(CREATE_USER_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ username: name.toLowerCase(), email })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.message || 'Hesap oluşturulamadı.');
+      tempPassword = data.tempPassword;
+    } catch (err) {
+      return show('Hesap oluşturulamadı: ' + err.message, false);
+    }
+
+    // 2) Görüntü/rapor kaydını yerel listeye ekle (mevcut davranış)
     const up = +(100 - sum).toFixed(1);
     const totalSec = Math.max(0, parseFloat(document.getElementById('newTotal').value) || 0) * 60;
     const mk = pct => ({ seconds: +(totalSec * pct / 100).toFixed(1), percent: pct });
-
     const acts = {
       standing: mk(sp), walking: mk(wp), sitting: mk(stp),
       unknown: { seconds: +(totalSec * up / 100).toFixed(1), percent: up }
     };
-
     extras.push({ name, area: area || 'Manuel kayıt', acts });
     localStorage.setItem('extraEmployees', JSON.stringify(extras));
 
-    ['newName','newArea','newStanding','newWalking','newSitting','newTotal'].forEach(id => document.getElementById(id).value = '');
+    ['newName','newEmail','newArea','newStanding','newWalking','newSitting','newTotal']
+      .forEach(id => document.getElementById(id).value = '');
     closeAddDirect();
     loadData();
+
+    alert('✓ Çalışan eklendi.\n\nKullanıcı adı: ' + name.toLowerCase() +
+          '\nGeçici şifre: ' + (tempPassword || '(e-posta ile gönderildi)') +
+          '\n\nKişiye iletin; ilk girişte kendi şifresini belirleyecek. Davet e-postası da gönderildi.');
   }
 
   function removeEmployee(name) {
@@ -746,7 +773,7 @@
 </script>
   <!-- ÇIKIŞ: kullanıcı kartına tıklayınca oturum kapanır -->
   <script>
-    function logout() { sessionStorage.clear(); window.location.replace('index.html'); }
+    function logout() { Auth.logout(); }
     document.querySelectorAll('.user-card').forEach(function (el) {
       el.style.cursor = 'pointer';
       el.title = 'Çıkış Yap';

@@ -2,13 +2,9 @@
 <html lang="tr">
 <head>
   <!-- ERİŞİM KORUMASI: yalnızca admin olarak giriş yapanlar görebilir -->
-  <script>
-    (function () {
-      if (sessionStorage.getItem('role') !== 'admin') {
-        window.location.replace('index.html');
-      }
-    })();
-  </script>
+  <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.16/dist/amazon-cognito-identity.min.js"></script>
+  <script src="auth.js"></script>
+  <script>Auth.requireAuth('admin');</script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Standalyze — Kamera Kayıtları</title>
@@ -567,7 +563,7 @@
   loadRecordingsFromS3();
 </script>
   <script>
-    function logout() { sessionStorage.clear(); window.location.replace('index.html'); }
+    function logout() { Auth.logout(); }
     document.querySelectorAll('.user-card').forEach(function (el) {
       el.style.cursor = 'pointer';
       el.title = 'Çıkış Yap';

@@ -2,13 +2,9 @@
 <html lang="tr">
 <head>
   <!-- ERİŞİM KORUMASI: yalnızca admin olarak giriş yapanlar görebilir -->
-  <script>
-    (function () {
-      if (sessionStorage.getItem('role') !== 'admin') {
-        window.location.replace('index.html');
-      }
-    })();
-  </script>
+  <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.16/dist/amazon-cognito-identity.min.js"></script>
+  <script src="auth.js"></script>
+  <script>Auth.requireAuth('admin');</script>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Standalyze — Ayarlar</title>
@@ -223,7 +219,7 @@
             </div>
             <div class="field">
               <label>Yeni Şifre</label>
-              <input class="input" id="newPw" type="password" placeholder="En az 4 karakter" />
+              <input class="input" id="newPw" type="password" placeholder="En az 8 karakter" />
             </div>
             <div class="field">
               <label>Yeni Şifre (Tekrar)</label>
@@ -257,7 +253,7 @@
 <script>
   document.getElementById('dateStr').textContent = new Date().toLocaleDateString('tr-TR', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
 
-  function logout() { sessionStorage.clear(); window.location.replace('index.html'); }
+  function logout() { Auth.logout(); }
 
   // toggle'lar — tercih localStorage'da saklanır
   document.querySelectorAll('.toggle').forEach(t => {
@@ -268,27 +264,30 @@
     localStorage.setItem(el.dataset.key, el.classList.contains('on') ? '1' : '0');
   }
 
-  // şifre değişikliği (admin hesabı)
-  function changePassword() {
+  // şifre değişikliği — Cognito üzerinden (giriş yapmış kullanıcı için)
+  async function changePassword() {
     const cur  = document.getElementById('curPw').value;
     const nw   = document.getElementById('newPw').value;
     const cf   = document.getElementById('cfPw').value;
     const note = document.getElementById('pwNote');
     const show = (msg, ok) => { note.textContent = msg; note.className = 'pw-note ' + (ok ? 'ok' : 'err'); };
 
-    // geçerli admin şifresi (index.html ile aynı varsayılan; değiştirilmişse localStorage'dan)
-    const effective = localStorage.getItem('pw_admin') || 'Admin@Standalyze25!';
-
     if (!cur || !nw || !cf)  return show('Lütfen tüm alanları doldur.', false);
-    if (cur !== effective)   return show('Mevcut şifre hatalı.', false);
-    if (nw.length < 4)       return show('Yeni şifre en az 4 karakter olmalı.', false);
     if (nw !== cf)           return show('Yeni şifreler eşleşmiyor.', false);
 
-    localStorage.setItem('pw_admin', nw);
-    document.getElementById('curPw').value = '';
-    document.getElementById('newPw').value = '';
-    document.getElementById('cfPw').value  = '';
-    show('✓ Şifre güncellendi.', true);
+    try {
+      await Auth.changePassword(cur, nw);
+      document.getElementById('curPw').value = '';
+      document.getElementById('newPw').value = '';
+      document.getElementById('cfPw').value  = '';
+      show('✓ Şifre güncellendi.', true);
+    } catch (err) {
+      let msg = 'Şifre güncellenemedi.';
+      if (err && err.code === 'NotAuthorizedException')   msg = 'Mevcut şifre hatalı.';
+      else if (err && err.code === 'InvalidPasswordException') msg = 'Yeni şifre kurallara uymuyor: en az 8 karakter, büyük/küçük harf, rakam ve sembol.';
+      else if (err && err.code === 'LimitExceededException')   msg = 'Çok fazla deneme. Biraz sonra tekrar dene.';
+      show(msg, false);
+    }
   }
 </script>
 </body>

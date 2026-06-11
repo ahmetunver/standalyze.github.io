@@ -4,15 +4,9 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <!-- ERİŞİM KORUMASI: yalnızca çalışan olarak giriş yapanlar görebilir -->
-  <script>
-    (function () {
-      var role = sessionStorage.getItem('role');
-      var user = sessionStorage.getItem('user');
-      if (role !== 'employee' || !user) {
-        window.location.replace('index.html');
-      }
-    })();
-  </script>
+  <script src="https://cdn.jsdelivr.net/npm/amazon-cognito-identity-js@6.3.16/dist/amazon-cognito-identity.min.js"></script>
+  <script src="auth.js"></script>
+  <script>Auth.requireAuth('employee');</script>
   <title>Standalyze — Takip Raporum</title>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
@@ -189,7 +183,7 @@
   // ── Aynı veri kaynağı (sunucu yoksa yerel yedek) ──
   const FALLBACK = {"berk":{"sitting":{"seconds":12.5,"percent":4.0},"standing":{"seconds":205.7,"percent":65.0},"unknown":{"seconds":7.2,"percent":2.3},"walking":{"seconds":90.9,"percent":28.7}},"kadir":{"sitting":{"seconds":270.6,"percent":13.2},"standing":{"seconds":1346.2,"percent":65.9},"unknown":{"seconds":46.9,"percent":2.3},"walking":{"seconds":379.6,"percent":18.6}},"sevcan":{"sitting":{"seconds":179.2,"percent":11.4},"standing":{"seconds":1034.5,"percent":65.5},"unknown":{"seconds":31.9,"percent":2.0},"walking":{"seconds":332.9,"percent":21.1}},"mabed":{"sitting":{"seconds":97.6,"percent":20.1},"standing":{"seconds":282.0,"percent":58.0},"unknown":{"seconds":9.0,"percent":1.9},"walking":{"seconds":97.4,"percent":20.0}},"mazhar":{"sitting":{"seconds":21.0,"percent":7.5},"standing":{"seconds":187.3,"percent":67.3},"unknown":{"seconds":6.2,"percent":2.2},"walking":{"seconds":63.7,"percent":22.9}},"kevser":{"sitting":{"seconds":2.7,"percent":2.6},"standing":{"seconds":62.7,"percent":60.9},"unknown":{"seconds":3.5,"percent":3.4},"walking":{"seconds":34.1,"percent":33.1}},"sevgi":{"sitting":{"seconds":12.0,"percent":16.0},"standing":{"seconds":35.4,"percent":47.1},"unknown":{"seconds":2.2,"percent":2.9},"walking":{"seconds":25.6,"percent":34.1}}};
 
-  const USER = sessionStorage.getItem('user');           // giriş yapan çalışan
+  const USER = sessionStorage.getItem('user') || (window.Auth && Auth.usernameSync && Auth.usernameSync()) || '';  // giriş yapan çalışan
   const CAP  = USER ? USER.charAt(0).toUpperCase() + USER.slice(1) : 'Çalışan';
 
   document.getElementById('dateStr').textContent = new Date().toLocaleDateString('tr-TR', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
@@ -197,8 +191,7 @@
   document.getElementById('navAvatar').textContent = (USER || '--').slice(0,2).toUpperCase();
 
   function logout() {
-    sessionStorage.clear();
-    window.location.replace('index.html');
+    Auth.logout();
   }
 
   function secFmt(s) {
