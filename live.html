@@ -381,6 +381,7 @@
       hls.attachMedia(videoEl);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
+        videoEl.style.display = 'block';     // CSS'te display:none → görünür yap
         const p = videoEl.play();
         if (p) p.catch(() => {});           // autoplay engellenirse sessiz geç
         noSignalEl.style.display = 'none';
@@ -389,6 +390,7 @@
 
       // İlk frame gerçekten ekrana geldiğinde
       videoEl.addEventListener('playing', () => {
+        videoEl.style.display = 'block';
         noSignalEl.style.display = 'none';
         metaEl.textContent = `${label} · Canlı ▶`;
       });
@@ -425,6 +427,7 @@
       // Safari (yerleşik HLS)
       videoEl.src = url + '?_=' + Date.now();
       videoEl.addEventListener('loadedmetadata', () => {
+        videoEl.style.display = 'block';     // Safari'de de görünür yap
         const p = videoEl.play();
         if (p) p.catch(() => {});
         noSignalEl.style.display = 'none';
