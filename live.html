@@ -89,6 +89,41 @@
         </div>
       </div>
 
+      <!-- ── KAMERA KONTROL PANELİ ── -->
+      <style>
+        .ctl-panel{background:#fff;border:1px solid #ECE9F8;border-radius:16px;
+          padding:18px 20px;margin-bottom:20px;box-shadow:0 2px 12px rgba(60,40,140,.05);}
+        .ctl-head{display:flex;align-items:center;justify-content:space-between;
+          gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+        .ctl-title{font-weight:700;font-size:15px;color:#1A1635;}
+        .ctl-server{font-size:12px;font-weight:600;color:#8B85A8;}
+        .ctl-btns{display:flex;gap:10px;flex-wrap:wrap;}
+        .ctl-btn{display:inline-flex;align-items:center;gap:8px;cursor:pointer;
+          border:none;border-radius:10px;padding:11px 18px;font-size:13px;
+          font-weight:700;color:#fff;font-family:inherit;transition:transform .15s,opacity .2s,box-shadow .2s;}
+        .ctl-btn:hover:not(:disabled){transform:translateY(-2px);}
+        .ctl-btn:disabled{opacity:.45;cursor:not-allowed;transform:none;}
+        .ctl-btn.c7{background:linear-gradient(135deg,#7060D0,#5E87D4);box-shadow:0 4px 16px rgba(112,96,208,.35);}
+        .ctl-btn.c8{background:linear-gradient(135deg,#5E87D4,#38B882);box-shadow:0 4px 16px rgba(94,135,212,.35);}
+        .ctl-btn.both{background:linear-gradient(135deg,#7060D0,#38B882);box-shadow:0 4px 16px rgba(112,96,208,.30);}
+        .ctl-btn.kisa{background:linear-gradient(135deg,#8B72D8,#D06080);box-shadow:0 4px 16px rgba(208,96,128,.30);}
+        .ctl-info{margin-top:12px;font-size:13px;font-weight:600;min-height:18px;}
+        .ctl-info.ok{color:#207858;} .ctl-info.warn{color:#B07000;} .ctl-info.err{color:#C03050;}
+      </style>
+      <div class="ctl-panel">
+        <div class="ctl-head">
+          <div class="ctl-title">Kamera İşlemeyi Başlat</div>
+          <div class="ctl-server" id="ctlServerDot">● Kontrol sunucusu kontrol ediliyor…</div>
+        </div>
+        <div class="ctl-btns">
+          <button class="ctl-btn c7"   id="btnCam7" onclick="ctlStart('cam7', this)">CAM7 Başlat</button>
+          <button class="ctl-btn c8"   id="btnCam8" onclick="ctlStart('cam8', this)">CAM8 Başlat</button>
+          <button class="ctl-btn both" id="btnBoth" onclick="ctlStart('both', this)">İkisini Başlat</button>
+          <button class="ctl-btn kisa" id="btnKisa" onclick="ctlStart('kisa', this)">Kısa Test (CAM7)</button>
+        </div>
+        <div class="ctl-info" id="ctlInfo">İşlemek istediğin kamerayı seç.</div>
+      </div>
+
       <!-- Camera Grid -->
       <div class="cam-grid">
 
@@ -307,6 +342,72 @@
     if (el.requestFullscreen) el.requestFullscreen();
   }
   function goRecordings() { window.location.href = 'recordings.html'; }
+
+  // ── KAMERA KONTROL PANELİ ──────────────────────────────────────────
+  // Yerel kontrol sunucusu (control_server.py) işlemi başlatır.
+  const CONTROL = 'http://localhost:5000';
+
+  async function ctlStart(preset, btn) {
+    const info = document.getElementById('ctlInfo');
+    btn.disabled = true;
+    try {
+      const r = await fetch(CONTROL + '/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preset }),
+      });
+      const j = await r.json();
+      info.textContent = j.message;                 // başarı ya da "zaten çalışıyor" uyarısı
+      info.className = 'ctl-info ' + (j.ok ? 'ok' : 'warn');
+    } catch (e) {
+      info.textContent = '⛔ Kontrol sunucusuna ulaşılamadı. Makinede "python control_server.py" çalışıyor mu?';
+      info.className = 'ctl-info err';
+    } finally {
+      setTimeout(refreshCtl, 800);                  // durum güncellensin (butonlar kilitlensin)
+    }
+  }
+
+  async function refreshCtl() {
+    const dot = document.getElementById('ctlServerDot');
+    let running;
+    try {
+      const r = await fetch(CONTROL + '/status');
+      running = (await r.json()).running || {};
+    } catch (e) {
+      running = null;                               // sunucu kapalı
+    }
+
+    if (running === null) {
+      dot.textContent = '● Kontrol sunucusu kapalı';
+      dot.style.color = '#C03050';
+      // Sunucu kapalıyken butonlar pasif değil — denemesine izin ver (net hata gösterir)
+      ['btnCam7','btnCam8','btnBoth','btnKisa'].forEach(id =>
+        document.getElementById(id).disabled = false);
+      return;
+    }
+
+    dot.textContent = '● Kontrol sunucusu bağlı';
+    dot.style.color = '#16A34A';
+
+    const cam7on = !!running.CAM7, cam8on = !!running.CAM8;
+    document.getElementById('btnCam7').disabled = cam7on;
+    document.getElementById('btnCam8').disabled = cam8on;
+    document.getElementById('btnKisa').disabled = cam7on;          // kisa = CAM7 slotu
+    document.getElementById('btnBoth').disabled = cam7on || cam8on;
+
+    const parts = [];
+    if (cam7on) parts.push('CAM7 çalışıyor');
+    if (cam8on) parts.push('CAM8 çalışıyor');
+    if (parts.length) {
+      const info = document.getElementById('ctlInfo');
+      if (!info.textContent.startsWith('▶') && !info.textContent.startsWith('⚠'))
+        info.textContent = parts.join(' · ');
+    }
+  }
+
+  refreshCtl();
+  setInterval(refreshCtl, 4000);
+
 </script>
   <script>
     function logout() { Auth.logout(); }
