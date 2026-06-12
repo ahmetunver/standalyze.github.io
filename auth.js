@@ -42,8 +42,16 @@ const Auth = {
       user.authenticateUser(details, {
         onSuccess: (session) => resolve(Object.assign({ status: 'OK' }, Auth._apply(user, session))),
         onFailure: (err) => reject(err),
-        // Geçici şifreyle ilk giriş: kullanıcı yeni şifre belirlemeli
-        newPasswordRequired: () => { _pending = user; resolve({ status: 'NEW_PASSWORD' }); },
+        newPasswordRequired: (userAttributes) => {
+          // email gibi zorunlu attribute'ları saklıyoruz, setNewPassword'de kullanacağız
+          // sub ve email_verified gönderilmemeli — Cognito hata verir
+          delete userAttributes.email_verified;
+          delete userAttributes.phone_number_verified;
+          delete userAttributes.sub;
+          _pending = user;
+          _pending._requiredAttrs = userAttributes;
+          resolve({ status: 'NEW_PASSWORD' });
+        },
       });
     });
   },
@@ -53,8 +61,8 @@ const Auth = {
   setNewPassword(newPassword) {
     return new Promise((resolve, reject) => {
       if (!_pending) return reject({ code: 'NoPendingUser' });
-      // İkinci parametre {} : ekstra zorunlu attribute istemiyoruz (pool'u sade tut)
-      _pending.completeNewPasswordChallenge(newPassword, {}, {
+      const attrs = _pending._requiredAttrs || {};
+      _pending.completeNewPasswordChallenge(newPassword, attrs, {
         onSuccess: (session) => { const u = _pending; _pending = null; resolve(Object.assign({ status: 'OK' }, Auth._apply(u, session))); },
         onFailure: (err) => reject(err),
       });
