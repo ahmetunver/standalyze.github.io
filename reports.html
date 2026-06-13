@@ -12,6 +12,65 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
     <link rel="stylesheet" href="app.css" />
 
+  <!-- ── Yeni özellikler için reports'a ÖZEL stiller (diğer sayfaları etkilemez) ── -->
+  <style>
+    body.page-reports input[type="date"]{
+      font-family:inherit; font-size:12px; font-weight:600; color:#1A1635;
+      background:#F0EEF8; border:1.5px solid #E0DAF8; border-radius:8px;
+      padding:6px 10px; cursor:pointer; outline:none; transition:all .15s;
+    }
+    body.page-reports input[type="date"]:focus{ border-color:#7060D0; box-shadow:0 0 0 3px rgba(112,96,208,.12); }
+    body.page-reports .ctl{ display:flex; align-items:center; gap:6px; }
+    body.page-reports .ctl-label{ font-size:10px; font-weight:600; letter-spacing:1px; text-transform:uppercase; color:#8B85A8; }
+
+    /* kişi seçim çipleri */
+    body.page-reports .chips{ display:flex; flex-wrap:wrap; gap:8px; }
+    body.page-reports .chip{
+      display:inline-flex; align-items:center; gap:7px; padding:6px 12px; border-radius:100px;
+      border:1.5px solid #E0DAF8; background:#fff; font-size:12px; font-weight:600;
+      color:#6B5FD4; cursor:pointer; transition:all .15s; user-select:none;
+    }
+    body.page-reports .chip:hover{ border-color:#C8C0E8; background:#FAF9FF; }
+    body.page-reports .chip .dot{ width:9px; height:9px; border-radius:50%; background:#C8C0E8; flex-shrink:0; transition:background .15s; }
+    body.page-reports .chip.on{ background:#EFECFF; border-color:#7060D0; color:#4A3FB0; }
+
+    /* metrik pill'leri */
+    body.page-reports .pills{ display:flex; gap:2px; background:#F0EEF8; border-radius:8px; padding:3px; }
+    body.page-reports .pill-btn{
+      border:none; cursor:pointer; border-radius:6px; padding:5px 11px; font-size:11px;
+      font-weight:600; background:transparent; color:#6B5FD4; font-family:inherit; transition:all .15s;
+    }
+    body.page-reports .pill-btn.on{ background:#fff; box-shadow:0 1px 4px rgba(0,0,0,.08); color:#7060D0; }
+
+    /* karşılaştırma kontrol satırları */
+    body.page-reports .cmp-controls{ display:flex; flex-direction:column; gap:14px; margin-bottom:1.2rem; }
+    body.page-reports .cmp-row{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+    body.page-reports .cmp-row .ctl-label{ min-width:54px; }
+    body.page-reports .btn-apply{
+      display:inline-flex; align-items:center; gap:6px; padding:7px 16px; border-radius:10px; border:none;
+      background:linear-gradient(135deg,#7060D0,#5E87D4); color:#fff; font-size:12px; font-weight:700;
+      cursor:pointer; font-family:inherit; transition:transform .15s, box-shadow .2s; box-shadow:0 3px 14px rgba(112,96,208,.35);
+    }
+    body.page-reports .btn-apply:hover{ transform:translateY(-1px); box-shadow:0 6px 20px rgba(112,96,208,.45); }
+
+    /* düşüş uyarı paneli */
+    body.page-reports .alert-panel{ background:#FFF7ED; border:1px solid #FED7AA; border-radius:14px; padding:1.1rem 1.3rem; margin-bottom:12px; }
+    body.page-reports .alert-head{ display:flex; align-items:center; gap:8px; font-size:13px; font-weight:800; color:#B45309; margin-bottom:.7rem; }
+    body.page-reports .alert-head svg{ width:17px; height:17px; }
+    body.page-reports .alert-item{ display:flex; align-items:center; gap:10px; font-size:12px; color:#92400E; padding:8px 0; border-top:1px solid #FDE8C8; }
+    body.page-reports .alert-item b{ color:#7C2D12; }
+    body.page-reports .alert-trend{ color:#C2410C; font-weight:700; }
+    body.page-reports .btn-mail{
+      margin-left:auto; display:inline-flex; align-items:center; gap:5px; padding:5px 11px; border-radius:8px;
+      border:1.5px solid #FBBF77; background:#fff; color:#B45309; font-size:11px; font-weight:700; cursor:pointer;
+      text-decoration:none; font-family:inherit; transition:all .15s;
+    }
+    body.page-reports .btn-mail:hover{ background:#FFF1E0; }
+    body.page-reports .alert-empty{ font-size:12px; color:#A89FD8; }
+
+    body.page-reports #compareChart{ max-height:320px; }
+  </style>
+
 </head>
 <body class="page-reports">
 <div class="app">
@@ -79,17 +138,15 @@
           <button class="cam-btn" data-cam="CAM8"  onclick="setCamera('CAM8')"  style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:400;background:transparent;color:#6B5FD4;">CAM8</button>
         </div>
 
-        <!-- Rapor periyodu seçici -->
-        <div style="display:flex;gap:2px;background:rgba(112,96,208,0.08);border-radius:8px;padding:3px;">
-          <button class="period-btn" data-period="daily" onclick="setPeriod('daily')" style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;background:rgba(112,96,208,0.12);color:#6B5FD4;">Günlük</button>
-          <button class="period-btn" data-period="weekly" onclick="setPeriod('weekly')" style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:400;background:transparent;color:#6B5FD4;">Haftalık</button>
-          <button class="period-btn" data-period="monthly" onclick="setPeriod('monthly')" style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:400;background:transparent;color:#6B5FD4;">Aylık</button>
-          <button class="period-btn" data-period="yearly" onclick="setPeriod('yearly')" style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:400;background:transparent;color:#6B5FD4;">Yıllık</button>
+        <!-- Tarih seçici (gün bazlı filtreleme) -->
+        <div class="ctl">
+          <span class="ctl-label">Tarih</span>
+          <input type="date" id="datePicker" onchange="onDateChange()" />
         </div>
         <span class="topbar-date" id="dateStr"></span>
-        <button class="notif-btn">
+        <button class="notif-btn" onclick="document.getElementById('alertPanel').scrollIntoView({behavior:'smooth'})" title="Düşüş uyarıları">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-          <div class="notif-dot"></div>
+          <div class="notif-dot" id="notifDot" style="display:none"></div>
         </button>
       </div>
     </div>
@@ -108,6 +165,15 @@
 
       <!-- stat cards -->
       <div class="stat-row" id="statRow"></div>
+
+      <!-- Düşüş uyarıları (3 gün üst üste düşen çalışanlar) -->
+      <div class="alert-panel" id="alertPanel" style="display:none">
+        <div class="alert-head">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span id="alertHeadText">Performans Düşüş Uyarısı</span>
+        </div>
+        <div id="alertList"></div>
+      </div>
 
       <!-- charts -->
       <div class="charts-grid">
@@ -134,21 +200,44 @@
         </div>
       </div>
 
-      <!-- Stacked aktivite karşılaştırma -->
+      <!-- Kişi Bazlı Karşılaştırma (çizgi grafiği) -->
       <div class="panel chart-full">
         <div class="panel-header">
           <div>
-            <div class="panel-title">Çalışan Bazlı Aktivite Karşılaştırması</div>
-            <div class="panel-sub">Ayakta / Yürüme / Oturma dağılımı (%)</div>
-          </div>
-          <div class="legend">
-            <div class="legend-item"><div class="legend-dot" style="background:#7060D0"></div>Ayakta</div>
-            <div class="legend-item"><div class="legend-dot" style="background:#5E87D4"></div>Yürüme</div>
-            <div class="legend-item"><div class="legend-dot" style="background:#D06080"></div>Oturma</div>
-            <div class="legend-item"><div class="legend-dot" style="background:#C0BAD8"></div>Bilinmiyor</div>
+            <div class="panel-title">Kişi Bazlı Karşılaştırma</div>
+            <div class="panel-sub">Seçili çalışanların günlük çalışma süresi (her kişi farklı renk)</div>
           </div>
         </div>
-        <canvas id="stackedChart" style="max-height:180px"></canvas>
+
+        <div class="cmp-controls">
+          <!-- Çalışan seçimi -->
+          <div class="cmp-row">
+            <span class="ctl-label">Çalışanlar</span>
+            <div class="chips" id="personChips"></div>
+          </div>
+          <!-- Metrik + tarih aralığı -->
+          <div class="cmp-row">
+            <span class="ctl-label">Metrik</span>
+            <div class="pills" id="metricPills">
+              <button class="pill-btn on" data-metric="total"    onclick="setMetric('total')">Toplam</button>
+              <button class="pill-btn"    data-metric="standing" onclick="setMetric('standing')">Ayakta</button>
+              <button class="pill-btn"    data-metric="walking"  onclick="setMetric('walking')">Yürüme</button>
+              <button class="pill-btn"    data-metric="sitting"  onclick="setMetric('sitting')">Oturma</button>
+            </div>
+            <span class="ctl-label" style="margin-left:6px">Aralık</span>
+            <div class="ctl"><input type="date" id="cmpFrom" /></div>
+            <span style="color:#C0BAD8">→</span>
+            <div class="ctl"><input type="date" id="cmpTo" /></div>
+            <button class="btn-apply" onclick="loadComparison()">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><polyline points="20 6 9 17 4 12"/></svg>
+              Karşılaştır
+            </button>
+          </div>
+        </div>
+
+        <div style="position:relative;height:320px">
+          <canvas id="compareChart"></canvas>
+        </div>
       </div>
 
     </div>
@@ -159,7 +248,6 @@
   const FALLBACK = {"berk":{"sitting":{"seconds":12.5,"percent":4.0},"standing":{"seconds":205.7,"percent":65.0},"unknown":{"seconds":7.2,"percent":2.3},"walking":{"seconds":90.9,"percent":28.7}},"kadir":{"sitting":{"seconds":270.6,"percent":13.2},"standing":{"seconds":1346.2,"percent":65.9},"unknown":{"seconds":46.9,"percent":2.3},"walking":{"seconds":379.6,"percent":18.6}},"sevcan":{"sitting":{"seconds":179.2,"percent":11.4},"standing":{"seconds":1034.5,"percent":65.5},"unknown":{"seconds":31.9,"percent":2.0},"walking":{"seconds":332.9,"percent":21.1}},"mabed":{"sitting":{"seconds":97.6,"percent":20.1},"standing":{"seconds":282.0,"percent":58.0},"unknown":{"seconds":9.0,"percent":1.9},"walking":{"seconds":97.4,"percent":20.0}},"mazhar":{"sitting":{"seconds":21.0,"percent":7.5},"standing":{"seconds":187.3,"percent":67.3},"unknown":{"seconds":6.2,"percent":2.2},"walking":{"seconds":63.7,"percent":22.9}},"kevser":{"sitting":{"seconds":2.7,"percent":2.6},"standing":{"seconds":62.7,"percent":60.9},"unknown":{"seconds":3.5,"percent":3.4},"walking":{"seconds":34.1,"percent":33.1}},"sevgi":{"sitting":{"seconds":12.0,"percent":16.0},"standing":{"seconds":35.4,"percent":47.1},"unknown":{"seconds":2.2,"percent":2.9},"walking":{"seconds":25.6,"percent":34.1}}};
 
   const COLORS = ['#7060D0','#5E87D4','#D06080','#40A878','#D09040','#9060C0','#4090B0'];
-  const PERIODS = { daily:'Günlük', weekly:'Haftalık', monthly:'Aylık', yearly:'Yıllık' };
 
   document.getElementById('dateStr').textContent = new Date().toLocaleDateString('tr-TR', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
 
@@ -170,18 +258,52 @@
   // Seçili kamera: 'both' | 'CAM7' | 'CAM8'
   let activeCamera = 'both';
 
-  // Seçili rapor periyodu: 'daily' | 'weekly' | 'monthly' | 'yearly'
-  let activePeriod = 'daily';
+  // İç uyumluluk: S3 yedeği periyot anahtarı kullanmaz; 'daily' sabit bırakıldı.
+  const activePeriod = 'daily';
+
+  // Seçili gün (gün bazlı filtre) — varsayılan: bugün
+  let activeDate = isoToday();
 
   let currentData = FALLBACK;
   let donutChart = null;
   let barChart = null;
-  let stackedChart = null;
+  let compareChart = null;
 
-  function labelPeriod(period = activePeriod) {
-    return PERIODS[period] || PERIODS.daily;
+  // ── Düşüş uyarısı parametreleri ──
+  const DECLINE_DAYS     = 3;     // kaç gün üst üste düşüş aranacak
+  const DECLINE_MIN_DROP = 0.15;  // pencere içinde ilk→son en az %15 düşüş (gürültüyü ele)
+  const ADMIN_EMAIL      = 'admin@standalyze.local'; // mailto için (kendi adresinle değiştir)
+
+  // ── Karşılaştırma durumu ──
+  const cmp = {
+    metric: 'total',     // total | standing | walking | sitting
+    selected: new Set(), // grafikte gösterilecek çalışanlar
+    series: {},          // { isim: [{date,total,standing,walking,sitting,unknown}] }
+    from: null, to: null,
+  };
+
+  // ── Tarih yardımcıları ──
+  function isoToday(){ return new Date().toISOString().slice(0,10); }
+  function isoShift(days){ const d=new Date(); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); }
+  function dateRange(from, to){
+    const out=[]; const d=new Date(from+'T00:00:00'); const end=new Date(to+'T00:00:00');
+    let guard=0;
+    while(d<=end && guard++<400){ out.push(d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); }
+    return out;
+  }
+  function trDay(iso){ const d=new Date(iso+'T00:00:00'); return d.toLocaleDateString('tr-TR',{day:'2-digit',month:'short'}); }
+
+  // ── Süre biçimleyici: 4880 sn → "1 sa 21 dk" ──
+  function fmtHM(seconds){
+    const m  = Math.round((Number(seconds)||0)/60);
+    const h  = Math.floor(m/60);
+    const mm = m%60;
+    if(h>0 && mm>0) return `${h} sa ${mm} dk`;
+    if(h>0)         return `${h} sa`;
+    return `${mm} dk`;
   }
 
+  function labelPeriod(){ return activeDate; }      // CSV/etiketlerde artık seçili tarih
   function labelCamera(cam = activeCamera) {
     return cam === 'both' ? 'CAM7+CAM8' : cam;
   }
@@ -195,13 +317,19 @@
     loadData();
   }
 
-  function setPeriod(period) {
-    activePeriod = period;
-    document.querySelectorAll('.period-btn').forEach(b => {
-      b.style.fontWeight = b.dataset.period === period ? '600' : '400';
-      b.style.background = b.dataset.period === period ? 'rgba(112,96,208,0.12)' : 'transparent';
-    });
+  // Üst bardaki tarih seçici değişince günlük raporu yeniden çek
+  function onDateChange(){
+    activeDate = document.getElementById('datePicker').value || isoToday();
     loadData();
+  }
+
+  // Karşılaştırma metriği değişince yalnızca çizgi grafiği yenile
+  function setMetric(m){
+    cmp.metric = m;
+    document.querySelectorAll('#metricPills .pill-btn').forEach(b=>{
+      b.classList.toggle('on', b.dataset.metric===m);
+    });
+    renderCompareChart();
   }
 
   function hasActivity(obj) {
@@ -264,8 +392,22 @@
   }
 
   function buildReportsUrl() {
-    const params = new URLSearchParams({ camera: activeCamera, period: activePeriod });
+    // Artık periyot yerine SEÇİLİ GÜN gönderilir (gün bazlı filtre).
+    const params = new URLSearchParams({ camera: activeCamera, date: activeDate });
     return `${API_URL}/reports?${params.toString()}`;
+  }
+
+  // Seçili gün için DynamoDB'den (API Gateway üzerinden) rapor çek.
+  // Beklenen yanıt: { merged:{...}, CAM7:{...}, CAM8:{...} }  (rapor-şekilli)
+  // API bağlı değilse null döner → S3 yedeğine düşülür.
+  async function fetchDayFromApi() {
+    if (!API_URL || API_URL.includes('XXXX')) return null;
+    try {
+      const r = await fetch(buildReportsUrl(), { headers: { 'Accept': 'application/json' } });
+      if (!r.ok) return null;
+      const j = await r.json();
+      return (j && typeof j === 'object') ? j : null;
+    } catch (e) { return null; }
   }
 
   // ── AWS S3'ten rapor çek (reports/cam7_report.json, cam8_report.json) ──
@@ -279,7 +421,13 @@
     } catch (e) { return null; }
   }
 
-  // İki kameranın raporunu birleştir (saniyeleri topla; yüzde sonra hesaplanır)
+  // CAM7 ve CAM8 AYNI ortamı AYNI zaman diliminde FARKLI açılardan görür.
+  // Bu yüzden "her ikisi" görünümünde saniyeler TOPLANMAZ — toplanırsa aynı kişi
+  // iki kez sayılır (çift sayım). Kişi/aktivite başına MAKSİMUM alınır → kişi tek
+  // kez, tek bütün gibi hesaplanır.
+  //   • İkisi birden başlatıldıysa: max(CAM7,CAM8) → en iyi tek-kişi tahmini.
+  //   • Tek kamera başlatıldıysa: diğerinin verisi olmaz, max = o kameranın değeri
+  //     → otomatik olarak "tek kamera gibi" davranır.
   function mergeReports(...reports) {
     const out = {};
     for (const rep of reports) {
@@ -290,7 +438,7 @@
           const sec = (v && typeof v.seconds === 'number') ? v.seconds
                     : (typeof v === 'number' ? v : 0);
           out[name][act] = out[name][act] || { seconds: 0, percent: 0 };
-          out[name][act].seconds += sec;
+          out[name][act].seconds = Math.max(out[name][act].seconds, sec);
         }
       }
     }
@@ -299,6 +447,19 @@
 
   async function loadData() {
     const ds = document.getElementById('dataSource');
+
+    // 1) Önce seçili GÜN için DynamoDB/API dene (gerçek gün bazlı veri)
+    const apiDay = await fetchDayFromApi();
+    if (apiDay && isReportData(apiDay.merged || apiDay.CAM7 || apiDay.CAM8 || apiDay)) {
+      currentData = resolveReportData(apiDay);
+      ds.textContent = `● AWS Günlük Veri · ${trDay(activeDate)} (${labelCamera()})`;
+      ds.style.color = '#16A34A';
+      render(currentData);
+      syncCompareControls();
+      return;
+    }
+
+    // 2) Yedek: mevcut S3 toplu raporu (gün ayrımı yok)
     const [c7, c8] = await Promise.all([
       fetchReportJson('cam7_report.json'),
       fetchReportJson('cam8_report.json'),
@@ -307,16 +468,17 @@
     let raw;
     if (c7 || c8) {
       raw = { CAM7: c7 || {}, CAM8: c8 || {}, merged: mergeReports(c7, c8) };
-      ds.textContent = `● AWS Canlı Veri (${labelCamera()})`;
-      ds.style.color = '#16A34A';
+      ds.textContent = `● AWS Toplu Veri (${labelCamera()}) · gün filtresi için API gerekli`;
+      ds.style.color = '#D97706';
     } else {
       raw = { merged: FALLBACK, CAM7: FALLBACK, CAM8: {} };
-      ds.textContent = `● Yerel Veri · ${labelPeriod()}`;
+      ds.textContent = `● Yerel Örnek Veri · ${trDay(activeDate)}`;
       ds.style.color = '#D97706';
     }
 
     currentData = resolveReportData(raw);
     render(currentData);
+    syncCompareControls();
   }
 
   function render(data) {
@@ -334,15 +496,15 @@
     });
 
     document.getElementById('pageSubtitle').textContent =
-      `${labelCamera()} · ${labelPeriod()} rapor · ${entries.length} çalışan · Toplam ${(totAll/60).toFixed(1)} dk analiz edildi`;
+      `${labelCamera()} · ${trDay(activeDate)} raporu · ${entries.length} çalışan · Toplam ${fmtHM(totAll)} analiz edildi`;
 
     // stat cards
     const safePct = (part) => totAll > 0 ? Math.round(part / totAll * 100) : 0;
     const stats = [
-      { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#7060D0" stroke-width="2" width="17" height="17"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="21"/><line x1="9" y1="12" x2="15" y2="12"/></svg>`, label:'Toplam Ayakta', val: (totStand/60).toFixed(1)+'dk', sub: safePct(totStand)+'% oran', bg:'#EFECFF', col:'#7060D0' },
-      { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#5E87D4" stroke-width="2" width="17" height="17"><circle cx="12" cy="5" r="3"/><path d="M9 21l3-8 3 8"/><path d="M6 12l6 2 6-2"/></svg>`, label:'Toplam Yürüme', val: (totWalk/60).toFixed(1)+'dk', sub: safePct(totWalk)+'% oran', bg:'#EFF6FF', col:'#5E87D4' },
-      { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#D06080" stroke-width="2" width="17" height="17"><path d="M3 18h18M6 18V9a6 6 0 0 1 12 0v9"/></svg>`, label:'Toplam Oturma', val: (totSit/60).toFixed(1)+'dk', sub: safePct(totSit)+'% oran', bg:'#FFF0F6', col:'#D06080' },
-      { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2" width="17" height="17"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, label:'Analiz Süresi', val: (totAll/60).toFixed(1)+'dk', sub: entries.length+' çalışan', bg:'#F0FFF8', col:'#16A34A' },
+      { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#7060D0" stroke-width="2" width="17" height="17"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="21"/><line x1="9" y1="12" x2="15" y2="12"/></svg>`, label:'Toplam Ayakta', val: fmtHM(totStand), sub: safePct(totStand)+'% oran', bg:'#EFECFF', col:'#7060D0' },
+      { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#5E87D4" stroke-width="2" width="17" height="17"><circle cx="12" cy="5" r="3"/><path d="M9 21l3-8 3 8"/><path d="M6 12l6 2 6-2"/></svg>`, label:'Toplam Yürüme', val: fmtHM(totWalk), sub: safePct(totWalk)+'% oran', bg:'#EFF6FF', col:'#5E87D4' },
+      { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#D06080" stroke-width="2" width="17" height="17"><path d="M3 18h18M6 18V9a6 6 0 0 1 12 0v9"/></svg>`, label:'Toplam Oturma', val: fmtHM(totSit), sub: safePct(totSit)+'% oran', bg:'#FFF0F6', col:'#D06080' },
+      { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2" width="17" height="17"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, label:'Analiz Süresi', val: fmtHM(totAll), sub: entries.length+' çalışan', bg:'#F0FFF8', col:'#16A34A' },
     ];
     document.getElementById('statRow').innerHTML = stats.map(s => `
       <div class="stat-card">
@@ -357,7 +519,6 @@
 
     if (donutChart) donutChart.destroy();
     if (barChart) barChart.destroy();
-    if (stackedChart) stackedChart.destroy();
 
     // donut
     donutChart = new Chart(document.getElementById('donutChart'), {
@@ -376,7 +537,7 @@
         cutout: '68%',
         plugins: {
           legend: { position:'bottom', labels:{ font:{family:'Plus Jakarta Sans',size:11}, padding:12, usePointStyle:true } },
-          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${(ctx.raw/60).toFixed(1)}dk (${totAll > 0 ? Math.round(ctx.raw / totAll * 100) : 0}%)` } }
+          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${fmtHM(ctx.raw)} (${totAll > 0 ? Math.round(ctx.raw / totAll * 100) : 0}%)` } }
         }
       }
     });
@@ -397,50 +558,256 @@
       },
       options: {
         responsive: true, maintainAspectRatio: true,
-        plugins: { legend:{ display:false }, tooltip:{ callbacks:{ label: ctx => ` ${ctx.raw} dk` } } },
+        plugins: { legend:{ display:false }, tooltip:{ callbacks:{ label: ctx => ` ${fmtHM(ctx.raw*60)}` } } },
         scales: {
           y: { grid:{ color:'#F0EEF8' }, ticks:{ font:{family:'Plus Jakarta Sans',size:10}, color:'#8B85A8' } },
           x: { grid:{ display:false }, ticks:{ font:{family:'Plus Jakarta Sans',size:11}, color:'#1A1635' } }
         }
       }
     });
+  }
 
-    // stacked bar — aktivite yüzdeleri
-    stackedChart = new Chart(document.getElementById('stackedChart'), {
-      type: 'bar',
-      data: {
-        labels: names,
-        datasets: [
-          { label:'Ayakta',     data: entries.map(([,a]) => +a.standing.percent.toFixed(1)), backgroundColor:'#7060D0', borderRadius:0, stack:'s' },
-          { label:'Yürüme',     data: entries.map(([,a]) => +a.walking.percent.toFixed(1)),  backgroundColor:'#5E87D4', borderRadius:0, stack:'s' },
-          { label:'Oturma',     data: entries.map(([,a]) => +a.sitting.percent.toFixed(1)),  backgroundColor:'#D06080', borderRadius:0, stack:'s' },
-          { label:'Bilinmiyor', data: entries.map(([,a]) => +a.unknown.percent.toFixed(1)),  backgroundColor:'#E0DAF8', borderRadius:0, stack:'s' },
-        ]
-      },
+  function exportCSV() {
+    const rows = [['Tarih','Kamera','İsim','Ayakta(s)','Ayakta(%)','Yürüme(s)','Yürüme(%)','Oturma(s)','Oturma(%)','Bilinmiyor(s)','Toplam(s)']];
+    Object.entries(currentData || {}).forEach(([name,a]) => {
+      const total = a.standing.seconds+a.walking.seconds+a.sitting.seconds+a.unknown.seconds;
+      rows.push([activeDate, labelCamera(), name, a.standing.seconds, a.standing.percent, a.walking.seconds, a.walking.percent, a.sitting.seconds, a.sitting.percent, a.unknown.seconds, total.toFixed(1)]);
+    });
+    const csv = rows.map(r=>r.join(',')).join('\n');
+    const link = document.createElement('a');
+    link.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
+    link.download = `takip_raporu_${activeDate}_${activeCamera}.csv`;
+    link.click();
+  }
+
+  /* ════════════════════════════════════════════════════════════════════
+     KİŞİ BAZLI KARŞILAŞTIRMA  (çizgi grafiği) + DÜŞÜŞ UYARILARI
+     ════════════════════════════════════════════════════════════════════ */
+
+  // Renk paletini isimlere sabitle (her kişi hep aynı renk)
+  function colorFor(name){
+    const roster = Object.keys(currentData || {}).sort();
+    const i = roster.indexOf(name);
+    return COLORS[(i<0?0:i) % COLORS.length];
+  }
+
+  // Bir günün aktivite kırılımını metriğe göre DAKİKAYA çevir
+  function metricMinutes(day, metric){
+    if(!day) return 0;
+    const s = (metric==='total')
+      ? (day.standing+day.walking+day.sitting+day.unknown)
+      : (day[metric]||0);
+    return +(s/60).toFixed(1);
+  }
+
+  // ── API: bir çalışanın gün gün serisini çek ──
+  // Beklenen yanıt: { worker, days:[{date, standing_seconds, walking_seconds, sitting_seconds, unknown_seconds}, ...] }
+  async function fetchSeriesFromApi(name, from, to){
+    if (!API_URL || API_URL.includes('XXXX')) return null;
+    try {
+      const params = new URLSearchParams({ worker:name, from, to, camera:activeCamera });
+      const r = await fetch(`${API_URL}/series?${params.toString()}`, { headers:{ 'Accept':'application/json' } });
+      if (!r.ok) return null;
+      const j = await r.json();
+      const days = (j && (j.days || j.items)) || null;
+      if (!Array.isArray(days)) return null;
+      const byDate = {};
+      days.forEach(d => {
+        const date = d.date || d.report_date;
+        if (!date) return;
+        byDate[date] = {
+          standing: Number(d.standing_seconds ?? d.standing ?? 0),
+          walking : Number(d.walking_seconds  ?? d.walking  ?? 0),
+          sitting : Number(d.sitting_seconds  ?? d.sitting  ?? 0),
+          unknown : Number(d.unknown_seconds  ?? d.unknown  ?? 0),
+        };
+      });
+      return dateRange(from,to).map(date => ({ date, ...(byDate[date] || {standing:0,walking:0,sitting:0,unknown:0}) }));
+    } catch(e){ return null; }
+  }
+
+  // ── Yedek: API yokken örnek seri üret (tohumlu; bazı kişilere hafif düşüş eğilimi) ──
+  function _seed(str){ let h=2166136261; for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,16777619);} return ((h>>>0)%100000)/100000; }
+  function synthSeries(name, from, to){
+    const base = currentData[name] || FALLBACK[name];
+    const b = base ? {
+      standing: base.standing.seconds, walking: base.walking.seconds,
+      sitting:  base.sitting.seconds,  unknown: base.unknown.seconds,
+    } : { standing:600, walking:200, sitting:150, unknown:20 };
+    const range = dateRange(from,to);
+    const trend = (_seed(name+'|trend') - 0.55) * 0.11;   // çoğunlukla küçük (±) günlük eğilim
+    return range.map((date, idx) => {
+      const t     = 1 + trend*idx;                         // gün ilerledikçe eğilim
+      const noise = 0.94 + _seed(name+date)*0.12;          // küçük günlük dalgalanma
+      const f     = Math.max(0.2, t*noise);
+      return {
+        date,
+        standing:+(b.standing*f).toFixed(1),
+        walking :+(b.walking *f).toFixed(1),
+        sitting :+(b.sitting *f).toFixed(1),
+        unknown :+(b.unknown *f).toFixed(1),
+      };
+    });
+  }
+
+  async function getSeries(name, from, to){
+    const api = await fetchSeriesFromApi(name, from, to);
+    return api || synthSeries(name, from, to);
+  }
+
+  // Üst bar tarih seçici + karşılaştırma kontrollerini mevcut çalışan listesine göre hazırla
+  function syncCompareControls(){
+    // tarih seçici değeri
+    const dp = document.getElementById('datePicker');
+    if (dp && !dp.value) dp.value = activeDate;
+
+    // karşılaştırma tarih aralığı varsayılanı: son 7 gün
+    const cf = document.getElementById('cmpFrom');
+    const ct = document.getElementById('cmpTo');
+    if (cf && !cf.value) cf.value = isoShift(-6);
+    if (ct && !ct.value) ct.value = isoToday();
+
+    // çalışan çipleri
+    const roster = Object.keys(currentData || {}).sort();
+    if (cmp.selected.size === 0) roster.slice(0,2).forEach(n => cmp.selected.add(n));
+
+    const wrap = document.getElementById('personChips');
+    if (wrap) {
+      wrap.innerHTML = roster.map(n => {
+        const on = cmp.selected.has(n);
+        const cap = n.charAt(0).toUpperCase()+n.slice(1);
+        const c = colorFor(n);
+        return `<div class="chip ${on?'on':''}" data-name="${n}" onclick="togglePerson('${n}')">
+                  <span class="dot" style="background:${on?c:'#C8C0E8'}"></span>${cap}
+                </div>`;
+      }).join('');
+    }
+
+    // ilk yüklemede karşılaştırmayı bir kez çalıştır
+    if (!cmp._init) { cmp._init = true; loadComparison(); }
+  }
+
+  function togglePerson(name){
+    if (cmp.selected.has(name)) cmp.selected.delete(name);
+    else cmp.selected.add(name);
+    syncCompareControls();        // çip renklerini güncelle
+    renderCompareChart();         // grafiği güncelle (yeniden veri çekmeden)
+  }
+
+  // Seçili aralık için TÜM çalışanların serisini çek (uyarı taraması için de gerekir)
+  async function loadComparison(){
+    cmp.from = document.getElementById('cmpFrom').value || isoShift(-6);
+    cmp.to   = document.getElementById('cmpTo').value   || isoToday();
+    if (cmp.from > cmp.to) { const t=cmp.from; cmp.from=cmp.to; cmp.to=t; }
+
+    const roster = Object.keys(currentData || {}).sort();
+    const series = await Promise.all(roster.map(n => getSeries(n, cmp.from, cmp.to)));
+    cmp.series = {};
+    roster.forEach((n,i) => cmp.series[n] = series[i]);
+
+    renderCompareChart();
+    detectDeclines();             // 3 gün düşüş taraması
+  }
+
+  function renderCompareChart(){
+    const labels = dateRange(cmp.from || isoShift(-6), cmp.to || isoToday());
+    const sel = Object.keys(cmp.series).filter(n => cmp.selected.has(n));
+
+    const datasets = sel.map(name => {
+      const c = colorFor(name);
+      return {
+        label: name.charAt(0).toUpperCase()+name.slice(1),
+        data: (cmp.series[name]||[]).map(d => metricMinutes(d, cmp.metric)),
+        borderColor: c,
+        backgroundColor: c,
+        pointBackgroundColor: c,
+        tension: 0.3,
+        borderWidth: 2.5,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        fill: false,
+      };
+    });
+
+    if (compareChart) compareChart.destroy();
+    compareChart = new Chart(document.getElementById('compareChart'), {
+      type: 'line',
+      data: { labels: labels.map(trDay), datasets },
       options: {
-        responsive: true, maintainAspectRatio: true,
-        plugins: { legend:{ display:false } },
+        responsive:true, maintainAspectRatio:false,
+        interaction:{ mode:'index', intersect:false },
+        plugins: {
+          legend:{ position:'top', labels:{ font:{family:'Plus Jakarta Sans',size:11}, padding:14, usePointStyle:true, pointStyle:'line' } },
+          tooltip:{ callbacks:{ label: ctx => ` ${ctx.dataset.label}: ${fmtHM(ctx.raw*60)}` } }
+        },
         scales: {
-          y: { stacked:true, max:100, grid:{ color:'#F0EEF8' }, ticks:{ callback: v => v+'%', font:{family:'Plus Jakarta Sans',size:10}, color:'#8B85A8' } },
-          x: { stacked:true, grid:{ display:false }, ticks:{ font:{family:'Plus Jakarta Sans',size:11}, color:'#1A1635' } }
+          y: { beginAtZero:true, title:{ display:true, text:'Çalışma süresi (dk)', font:{family:'Plus Jakarta Sans',size:11}, color:'#8B85A8' },
+               grid:{ color:'#F0EEF8' }, ticks:{ font:{family:'Plus Jakarta Sans',size:10}, color:'#8B85A8' } },
+          x: { grid:{ display:false }, ticks:{ font:{family:'Plus Jakarta Sans',size:10}, color:'#1A1635' } }
         }
       }
     });
   }
 
-  function exportCSV() {
-    const rows = [['Periyot','Kamera','İsim','Ayakta(s)','Ayakta(%)','Yürüme(s)','Yürüme(%)','Oturma(s)','Oturma(%)','Bilinmiyor(s)','Toplam(s)']];
-    Object.entries(currentData || {}).forEach(([name,a]) => {
-      const total = a.standing.seconds+a.walking.seconds+a.sitting.seconds+a.unknown.seconds;
-      rows.push([labelPeriod(), labelCamera(), name, a.standing.seconds, a.standing.percent, a.walking.seconds, a.walking.percent, a.sitting.seconds, a.sitting.percent, a.unknown.seconds, total.toFixed(1)]);
+  /* ── DÜŞÜŞ TESPİTİ ──
+     Her çalışan için aralığın SON DECLINE_DAYS gününe bak.
+     Her gün bir öncekinden düşükse VE ilk→son düşüş ≥ DECLINE_MIN_DROP ise uyar. */
+  function detectDeclines(){
+    const alerts = [];
+    Object.entries(cmp.series).forEach(([name, days]) => {
+      const vals = (days||[]).map(d => metricMinutes(d,'total'));
+      if (vals.length < DECLINE_DAYS) return;
+      const win = vals.slice(-DECLINE_DAYS);
+      let strictlyDown = true;
+      for (let i=1;i<win.length;i++) if (!(win[i] < win[i-1])) strictlyDown = false;
+      const first = win[0], last = win[win.length-1];
+      const drop = first > 0 ? (first-last)/first : 0;
+      if (strictlyDown && drop >= DECLINE_MIN_DROP) {
+        alerts.push({ name, win, drop, days: (days||[]).slice(-DECLINE_DAYS) });
+      }
     });
-    const csv = rows.map(r=>r.join(',')).join('\n');
-    const link = document.createElement('a');
-    link.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
-    link.download = `takip_raporu_${activePeriod}_${activeCamera}.csv`;
-    link.click();
+    renderAlerts(alerts);
   }
 
+  function renderAlerts(alerts){
+    const panel = document.getElementById('alertPanel');
+    const list  = document.getElementById('alertList');
+    const dot   = document.getElementById('notifDot');
+    const head  = document.getElementById('alertHeadText');
+
+    if (!alerts.length) {
+      panel.style.display = 'none';
+      if (dot) dot.style.display = 'none';
+      return;
+    }
+
+    panel.style.display = 'block';
+    if (dot) dot.style.display = 'block';
+    head.textContent = `Performans Düşüş Uyarısı · ${alerts.length} çalışan`;
+
+    list.innerHTML = alerts.map(a => {
+      const cap = a.name.charAt(0).toUpperCase()+a.name.slice(1);
+      const trend = a.win.map(v => v.toFixed(0)).join(' → ') + ' dk';
+      const pct = Math.round(a.drop*100);
+      const last = a.days[a.days.length-1];
+      const subj = encodeURIComponent(`Standalyze: ${cap} için performans düşüş uyarısı`);
+      const body = encodeURIComponent(
+        `Merhaba,\n\n${cap} adlı çalışanın son ${DECLINE_DAYS} günkü çalışma süresi sürekli düşüşte:\n`+
+        `${trend}  (yaklaşık %${pct} azalma)\n\nSon kayıt tarihi: ${last?last.date:''}\n\nStandalyze otomatik uyarı.`
+      );
+      return `<div class="alert-item">
+        <span>⚠️ <b>${cap}</b> son ${DECLINE_DAYS} gün düşüşte:
+          <span class="alert-trend">${trend}</span> (≈%${pct} azalma)</span>
+        <a class="btn-mail" href="mailto:${ADMIN_EMAIL}?subject=${subj}&body=${body}">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="13" height="13"><path d="M4 4h16v16H4z" fill="none"/><polyline points="22,6 12,13 2,6"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+          Mail Gönder
+        </a>
+      </div>`;
+    }).join('');
+  }
+
+  // ── İlk yükleme ──
+  document.getElementById('datePicker').value = activeDate;
   loadData();
 </script>
   <!-- ÇIKIŞ: kullanıcı kartına tıklayınca oturum kapanır -->
