@@ -10,6 +10,9 @@
   <title>Standalyze — Takip Raporları</title>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <!-- PDF indirme için (no-build, CDN) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <link rel="stylesheet" href="app.css" />
 
   <!-- ── Yeni özellikler için reports'a ÖZEL stiller (diğer sayfaları etkilemez) ── -->
@@ -69,6 +72,21 @@
     body.page-reports .alert-empty{ font-size:12px; color:#A89FD8; }
 
     body.page-reports #compareChart{ max-height:320px; }
+
+    /* Yürüme kartı kaldırıldığı için üst kartlar 3'lü dizilsin */
+    body.page-reports .stat-row{ grid-template-columns:repeat(3,1fr); }
+
+    /* PDF yanındaki kişi filtresi */
+    body.page-reports .person-select{
+      font-family:inherit; font-size:12px; font-weight:600; color:#1A1635;
+      background:#F0EEF8; border:1.5px solid #E0DAF8; border-radius:10px;
+      padding:8px 30px 8px 12px; cursor:pointer; outline:none; transition:all .15s;
+      -webkit-appearance:none; appearance:none;
+      background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237060D0' stroke-width='2'><polyline points='6 9 12 15 18 9'/></svg>");
+      background-repeat:no-repeat; background-position:right 10px center;
+    }
+    body.page-reports .person-select:focus{ border-color:#7060D0; box-shadow:0 0 0 3px rgba(112,96,208,.12); }
+    body.page-reports .header-tools{ display:flex; align-items:center; gap:10px; }
   </style>
 
 </head>
@@ -157,10 +175,16 @@
           <h2>Aktivite Analiz Raporu</h2>
           <p id="pageSubtitle">Cam7 · Çalışma Alanı verileri yükleniyor...</p>
         </div>
-        <button class="btn-outline" onclick="exportCSV()">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          CSV İndir
-        </button>
+        <div class="header-tools">
+          <div class="ctl">
+            <span class="ctl-label">Kişi</span>
+            <select id="personFilter" class="person-select" onchange="onPersonFilter()"></select>
+          </div>
+          <button class="btn-outline" onclick="exportPDF()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><polyline points="9 15 12 18 15 15"/></svg>
+            PDF İndir
+          </button>
+        </div>
       </div>
 
       <!-- stat cards -->
@@ -221,7 +245,6 @@
             <div class="pills" id="metricPills">
               <button class="pill-btn on" data-metric="total"    onclick="setMetric('total')">Toplam</button>
               <button class="pill-btn"    data-metric="standing" onclick="setMetric('standing')">Ayakta</button>
-              <button class="pill-btn"    data-metric="walking"  onclick="setMetric('walking')">Yürüme</button>
               <button class="pill-btn"    data-metric="sitting"  onclick="setMetric('sitting')">Oturma</button>
             </div>
             <span class="ctl-label" style="margin-left:6px">Aralık</span>
@@ -264,6 +287,9 @@
   // Seçili gün (gün bazlı filtre) — varsayılan: bugün
   let activeDate = isoToday();
 
+  // Üstteki kişi filtresi: 'all' | çalışan adı
+  let activePerson = 'all';
+
   let currentData = FALLBACK;
   let donutChart = null;
   let barChart = null;
@@ -272,7 +298,7 @@
   // ── Düşüş uyarısı parametreleri ──
   const DECLINE_DAYS     = 3;     // kaç gün üst üste düşüş aranacak
   const DECLINE_MIN_DROP = 0.15;  // pencere içinde ilk→son en az %15 düşüş (gürültüyü ele)
-  const ADMIN_EMAIL      = 'admin@standalyze.local'; // mailto için (kendi adresinle değiştir)
+  const ADMIN_EMAIL      = 'ahmetunver@stu.topkapi.edu.tr'; // uyarı mailinin gideceği adres
 
   // ── Karşılaştırma durumu ──
   const cmp = {
@@ -454,7 +480,7 @@
       currentData = resolveReportData(apiDay);
       ds.textContent = `● AWS Günlük Veri · ${trDay(activeDate)} (${labelCamera()})`;
       ds.style.color = '#16A34A';
-      render(currentData);
+      renderView();
       syncCompareControls();
       return;
     }
@@ -477,8 +503,43 @@
     }
 
     currentData = resolveReportData(raw);
-    render(currentData);
+    renderView();
     syncCompareControls();
+  }
+
+  // ── Üst kişi filtresi ──
+  // Seçili kişiye göre (veya hepsi) üstteki kart/grafiklerin verisini süzer.
+  function filteredData() {
+    if (activePerson === 'all') return currentData;
+    const one = currentData[activePerson];
+    return one ? { [activePerson]: one } : currentData;
+  }
+
+  // Filtre <select>'ini mevcut çalışan listesine göre doldur.
+  function populatePersonFilter() {
+    const sel = document.getElementById('personFilter');
+    if (!sel) return;
+    const roster = Object.keys(currentData || {}).sort();
+    // seçili kişi artık yoksa 'all'a dön
+    if (activePerson !== 'all' && !roster.includes(activePerson)) activePerson = 'all';
+    const opts = ['<option value="all">Tüm Çalışanlar</option>']
+      .concat(roster.map(n => {
+        const cap = n.charAt(0).toUpperCase()+n.slice(1);
+        return `<option value="${n}"${n===activePerson?' selected':''}>${cap}</option>`;
+      }));
+    sel.innerHTML = opts.join('');
+    sel.value = activePerson;
+  }
+
+  function onPersonFilter() {
+    activePerson = document.getElementById('personFilter').value || 'all';
+    render(filteredData());   // sadece üst görünümü yeniden çiz (veri yeniden çekilmez)
+  }
+
+  // Filtreyi doldur + filtrelenmiş veriyle çiz
+  function renderView() {
+    populatePersonFilter();
+    render(filteredData());
   }
 
   function render(data) {
@@ -502,7 +563,6 @@
     const safePct = (part) => totAll > 0 ? Math.round(part / totAll * 100) : 0;
     const stats = [
       { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#7060D0" stroke-width="2" width="17" height="17"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="21"/><line x1="9" y1="12" x2="15" y2="12"/></svg>`, label:'Toplam Ayakta', val: fmtHM(totStand), sub: safePct(totStand)+'% oran', bg:'#EFECFF', col:'#7060D0' },
-      { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#5E87D4" stroke-width="2" width="17" height="17"><circle cx="12" cy="5" r="3"/><path d="M9 21l3-8 3 8"/><path d="M6 12l6 2 6-2"/></svg>`, label:'Toplam Yürüme', val: fmtHM(totWalk), sub: safePct(totWalk)+'% oran', bg:'#EFF6FF', col:'#5E87D4' },
       { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#D06080" stroke-width="2" width="17" height="17"><path d="M3 18h18M6 18V9a6 6 0 0 1 12 0v9"/></svg>`, label:'Toplam Oturma', val: fmtHM(totSit), sub: safePct(totSit)+'% oran', bg:'#FFF0F6', col:'#D06080' },
       { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2" width="17" height="17"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`, label:'Analiz Süresi', val: fmtHM(totAll), sub: entries.length+' çalışan', bg:'#F0FFF8', col:'#16A34A' },
     ];
@@ -524,10 +584,10 @@
     donutChart = new Chart(document.getElementById('donutChart'), {
       type: 'doughnut',
       data: {
-        labels: ['Ayakta','Yürüme','Oturma','Bilinmiyor'],
+        labels: ['Ayakta','Oturma','Bilinmiyor'],
         datasets: [{
-          data: [totStand, totWalk, totSit, totUnk].map(v => +v.toFixed(1)),
-          backgroundColor: ['#7060D0','#5E87D4','#D06080','#E0DAF8'],
+          data: [totStand, totSit, totUnk].map(v => +v.toFixed(1)),
+          backgroundColor: ['#7060D0','#D06080','#E0DAF8'],
           borderWidth: 0,
           hoverOffset: 6,
         }]
@@ -567,17 +627,114 @@
     });
   }
 
-  function exportCSV() {
-    const rows = [['Tarih','Kamera','İsim','Ayakta(s)','Ayakta(%)','Yürüme(s)','Yürüme(%)','Oturma(s)','Oturma(%)','Bilinmiyor(s)','Toplam(s)']];
-    Object.entries(currentData || {}).forEach(([name,a]) => {
-      const total = a.standing.seconds+a.walking.seconds+a.sitting.seconds+a.unknown.seconds;
-      rows.push([activeDate, labelCamera(), name, a.standing.seconds, a.standing.percent, a.walking.seconds, a.walking.percent, a.sitting.seconds, a.sitting.percent, a.unknown.seconds, total.toFixed(1)]);
+  // ── PDF İNDİR — başlık + özet + grafikler + tablo (kullanıcı dostu) ──
+  function exportPDF() {
+    if (!window.jspdf || !window.jspdf.jsPDF) { alert('PDF kütüphanesi yüklenemedi. İnternet bağlantını kontrol et.'); return; }
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ unit:'pt', format:'a4' });
+    const PW = doc.internal.pageSize.getWidth();
+    const PH = doc.internal.pageSize.getHeight();
+    const M  = 40;
+    let y = 0;
+
+    // Üst renk şeridi + başlık
+    doc.setFillColor(112,96,208); doc.rect(0,0,PW,10,'F');
+    y = 44;
+    doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(26,22,53);
+    doc.text('Standalyze — Aktivite Raporu', M, y);
+    y += 20;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(139,133,168);
+    const entries = Object.entries(filteredData());
+    const whoLabel = activePerson === 'all' ? `${entries.length} çalışan` : entries[0]?.[0]?.charAt(0).toUpperCase()+entries[0]?.[0]?.slice(1);
+    doc.text(`${labelCamera()}   ·   ${activeDate}   ·   ${whoLabel}`, M, y);
+    y += 22;
+
+    // Toplamlar (yürüme yok)
+    let totStand=0, totSit=0, totUnk=0, totAll=0;
+    entries.forEach(([,a]) => {
+      totStand += a.standing.seconds;
+      totSit   += a.sitting.seconds;
+      totUnk   += a.unknown.seconds;
+      totAll   += a.standing.seconds + a.sitting.seconds + a.unknown.seconds;
     });
-    const csv = rows.map(r=>r.join(',')).join('\n');
-    const link = document.createElement('a');
-    link.href = 'data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
-    link.download = `takip_raporu_${activeDate}_${activeCamera}.csv`;
-    link.click();
+
+    // Özet kutuları
+    const cards = [
+      ['Toplam Analiz', fmtHM(totAll), [112,96,208]],
+      ['Toplam Ayakta', fmtHM(totStand), [112,96,208]],
+      ['Toplam Oturma', fmtHM(totSit), [208,96,128]],
+    ];
+    const cw = (PW - 2*M - 2*12) / 3;
+    cards.forEach((c,i) => {
+      const x = M + i*(cw+12);
+      doc.setFillColor(247,246,255); doc.roundedRect(x, y, cw, 46, 8, 8, 'F');
+      doc.setFontSize(9);  doc.setTextColor(139,133,168); doc.text(c[0], x+12, y+18);
+      doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(c[2][0],c[2][1],c[2][2]);
+      doc.text(String(c[1]), x+12, y+36);
+      doc.setFont('helvetica','normal');
+    });
+    y += 46 + 22;
+
+    // Grafikleri görüntü olarak ekle (donut + bar yan yana)
+    const placeCanvas = (id, x, w) => {
+      const c = document.getElementById(id);
+      if (!c || !c.width) return 0;
+      try {
+        const img = c.toDataURL('image/png', 1.0);
+        const h = w * (c.height / c.width);
+        doc.addImage(img, 'PNG', x, y, w, h);
+        return h;
+      } catch (e) { return 0; }
+    };
+    doc.setFontSize(10); doc.setTextColor(26,22,53); doc.setFont('helvetica','bold');
+    doc.text('Genel Dağılım', M, y); doc.text('Kişi Başı Toplam Süre', M + (PW-2*M)/2 + 10, y);
+    doc.setFont('helvetica','normal');
+    y += 10;
+    const halfW = (PW - 2*M - 20) / 2;
+    const h1 = placeCanvas('donutChart', M, halfW);
+    const h2 = placeCanvas('barChart', M + halfW + 20, halfW);
+    y += Math.max(h1, h2) + 24;
+
+    // Karşılaştırma çizgisi (varsa) — tam genişlik
+    const cmpC = document.getElementById('compareChart');
+    if (cmpC && cmpC.width) {
+      if (y + 180 > PH - M) { doc.addPage(); y = M; }
+      doc.setFont('helvetica','bold'); doc.setTextColor(26,22,53); doc.setFontSize(10);
+      doc.text(`Kişi Bazlı Karşılaştırma  (${cmp.from} → ${cmp.to})`, M, y);
+      doc.setFont('helvetica','normal');
+      y += 10;
+      const fullW = PW - 2*M;
+      const hc = placeCanvas('compareChart', M, fullW);
+      y += hc + 20;
+    }
+
+    // Tablo (yürüme sütunu yok)
+    const head = [['Çalışan','Ayakta','Oturma','Bilinmiyor','Toplam']];
+    const body = entries.map(([name,a]) => {
+      const total = a.standing.seconds + a.sitting.seconds + a.unknown.seconds;
+      const cap = name.charAt(0).toUpperCase()+name.slice(1);
+      return [cap, fmtHM(a.standing.seconds), fmtHM(a.sitting.seconds), fmtHM(a.unknown.seconds), fmtHM(total)];
+    });
+    if (doc.autoTable) {
+      doc.autoTable({
+        head, body, startY: y, margin:{ left:M, right:M },
+        styles:{ font:'helvetica', fontSize:9, cellPadding:6 },
+        headStyles:{ fillColor:[112,96,208], textColor:255, fontStyle:'bold' },
+        alternateRowStyles:{ fillColor:[247,246,255] },
+        theme:'grid',
+      });
+    }
+
+    // Alt bilgi
+    const pageCount = doc.internal.getNumberOfPages();
+    for (let i=1;i<=pageCount;i++){
+      doc.setPage(i);
+      doc.setFontSize(8); doc.setTextColor(168,159,216);
+      doc.text(`Standalyze · ${new Date().toLocaleString('tr-TR')}`, M, PH-16);
+      doc.text(`${i}/${pageCount}`, PW-M, PH-16, { align:'right' });
+    }
+
+    doc.save(`takip_raporu_${activeDate}_${activeCamera}.pdf`);
   }
 
   /* ════════════════════════════════════════════════════════════════════
