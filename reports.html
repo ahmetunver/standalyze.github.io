@@ -12,7 +12,7 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
   <!-- PDF indirme için (no-build, CDN) -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="stylesheet" href="app.css" />
 
   <!-- ── Yeni özellikler için reports'a ÖZEL stiller (diğer sayfaları etkilemez) ── -->
@@ -628,113 +628,137 @@
   }
 
   // ── PDF İNDİR — başlık + özet + grafikler + tablo (kullanıcı dostu) ──
-  function exportPDF() {
-    if (!window.jspdf || !window.jspdf.jsPDF) { alert('PDF kütüphanesi yüklenemedi. İnternet bağlantını kontrol et.'); return; }
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit:'pt', format:'a4' });
-    const PW = doc.internal.pageSize.getWidth();
-    const PH = doc.internal.pageSize.getHeight();
-    const M  = 40;
-    let y = 0;
+  // ── PDF İNDİR — tarayıcı render'ı ile (Türkçe karakterler düzgün) + şık tasarım ──
+  async function exportPDF() {
+    if (!window.jspdf || !window.jspdf.jsPDF || !window.html2canvas) {
+      alert('PDF kütüphaneleri yüklenemedi. İnternet bağlantını kontrol et.'); return;
+    }
 
-    // Üst renk şeridi + başlık
-    doc.setFillColor(112,96,208); doc.rect(0,0,PW,10,'F');
-    y = 44;
-    doc.setFont('helvetica','bold'); doc.setFontSize(18); doc.setTextColor(26,22,53);
-    doc.text('Standalyze — Aktivite Raporu', M, y);
-    y += 20;
-    doc.setFont('helvetica','normal'); doc.setFontSize(10); doc.setTextColor(139,133,168);
     const entries = Object.entries(filteredData());
-    const whoLabel = activePerson === 'all' ? `${entries.length} çalışan` : entries[0]?.[0]?.charAt(0).toUpperCase()+entries[0]?.[0]?.slice(1);
-    doc.text(`${labelCamera()}   ·   ${activeDate}   ·   ${whoLabel}`, M, y);
-    y += 22;
+    const whoLabel = activePerson === 'all'
+      ? `${entries.length} çalışan`
+      : (entries[0]?.[0]?.charAt(0).toUpperCase() + entries[0]?.[0]?.slice(1));
 
     // Toplamlar (yürüme yok)
     let totStand=0, totSit=0, totUnk=0, totAll=0;
     entries.forEach(([,a]) => {
-      totStand += a.standing.seconds;
-      totSit   += a.sitting.seconds;
-      totUnk   += a.unknown.seconds;
-      totAll   += a.standing.seconds + a.sitting.seconds + a.unknown.seconds;
+      totStand += a.standing.seconds; totSit += a.sitting.seconds;
+      totUnk += a.unknown.seconds;
+      totAll += a.standing.seconds + a.sitting.seconds + a.unknown.seconds;
     });
 
-    // Özet kutuları
-    const cards = [
-      ['Toplam Analiz', fmtHM(totAll), [112,96,208]],
-      ['Toplam Ayakta', fmtHM(totStand), [112,96,208]],
-      ['Toplam Oturma', fmtHM(totSit), [208,96,128]],
-    ];
-    const cw = (PW - 2*M - 2*12) / 3;
-    cards.forEach((c,i) => {
-      const x = M + i*(cw+12);
-      doc.setFillColor(247,246,255); doc.roundedRect(x, y, cw, 46, 8, 8, 'F');
-      doc.setFontSize(9);  doc.setTextColor(139,133,168); doc.text(c[0], x+12, y+18);
-      doc.setFont('helvetica','bold'); doc.setFontSize(14); doc.setTextColor(c[2][0],c[2][1],c[2][2]);
-      doc.text(String(c[1]), x+12, y+36);
-      doc.setFont('helvetica','normal');
-    });
-    y += 46 + 22;
+    // Mevcut grafikleri görüntüye çevir
+    const imgOf = (id) => { const c = document.getElementById(id); try { return (c && c.width) ? c.toDataURL('image/png',1.0) : ''; } catch(e){ return ''; } };
+    const donutImg = imgOf('donutChart');
+    const barImg   = imgOf('barChart');
+    const cmpImg   = imgOf('compareChart');
 
-    // Grafikleri görüntü olarak ekle (donut + bar yan yana)
-    const placeCanvas = (id, x, w) => {
-      const c = document.getElementById(id);
-      if (!c || !c.width) return 0;
-      try {
-        const img = c.toDataURL('image/png', 1.0);
-        const h = w * (c.height / c.width);
-        doc.addImage(img, 'PNG', x, y, w, h);
-        return h;
-      } catch (e) { return 0; }
-    };
-    doc.setFontSize(10); doc.setTextColor(26,22,53); doc.setFont('helvetica','bold');
-    doc.text('Genel Dağılım', M, y); doc.text('Kişi Başı Toplam Süre', M + (PW-2*M)/2 + 10, y);
-    doc.setFont('helvetica','normal');
-    y += 10;
-    const halfW = (PW - 2*M - 20) / 2;
-    const h1 = placeCanvas('donutChart', M, halfW);
-    const h2 = placeCanvas('barChart', M + halfW + 20, halfW);
-    y += Math.max(h1, h2) + 24;
-
-    // Karşılaştırma çizgisi (varsa) — tam genişlik
-    const cmpC = document.getElementById('compareChart');
-    if (cmpC && cmpC.width) {
-      if (y + 180 > PH - M) { doc.addPage(); y = M; }
-      doc.setFont('helvetica','bold'); doc.setTextColor(26,22,53); doc.setFontSize(10);
-      doc.text(`Kişi Bazlı Karşılaştırma  (${cmp.from} → ${cmp.to})`, M, y);
-      doc.setFont('helvetica','normal');
-      y += 10;
-      const fullW = PW - 2*M;
-      const hc = placeCanvas('compareChart', M, fullW);
-      y += hc + 20;
-    }
-
-    // Tablo (yürüme sütunu yok)
-    const head = [['Çalışan','Ayakta','Oturma','Bilinmiyor','Toplam']];
-    const body = entries.map(([name,a]) => {
+    const cap = (s) => s.charAt(0).toUpperCase()+s.slice(1);
+    const tableRows = entries.map(([name,a]) => {
       const total = a.standing.seconds + a.sitting.seconds + a.unknown.seconds;
-      const cap = name.charAt(0).toUpperCase()+name.slice(1);
-      return [cap, fmtHM(a.standing.seconds), fmtHM(a.sitting.seconds), fmtHM(a.unknown.seconds), fmtHM(total)];
-    });
-    if (doc.autoTable) {
-      doc.autoTable({
-        head, body, startY: y, margin:{ left:M, right:M },
-        styles:{ font:'helvetica', fontSize:9, cellPadding:6 },
-        headStyles:{ fillColor:[112,96,208], textColor:255, fontStyle:'bold' },
-        alternateRowStyles:{ fillColor:[247,246,255] },
-        theme:'grid',
-      });
-    }
+      return `<tr>
+        <td style="text-align:left;font-weight:600;color:#1A1635">${cap(name)}</td>
+        <td>${fmtHM(a.standing.seconds)}</td>
+        <td>${fmtHM(a.sitting.seconds)}</td>
+        <td>${fmtHM(a.unknown.seconds)}</td>
+        <td style="font-weight:700;color:#7060D0">${fmtHM(total)}</td>
+      </tr>`;
+    }).join('');
 
-    // Alt bilgi
-    const pageCount = doc.internal.getNumberOfPages();
-    for (let i=1;i<=pageCount;i++){
-      doc.setPage(i);
-      doc.setFontSize(8); doc.setTextColor(168,159,216);
-      doc.text(`Standalyze · ${new Date().toLocaleString('tr-TR')}`, M, PH-16);
-      doc.text(`${i}/${pageCount}`, PW-M, PH-16, { align:'right' });
-    }
+    const card = (label, val, col) => `
+      <div style="flex:1;background:#F7F6FF;border:1px solid #ECE8FB;border-radius:14px;padding:16px 18px">
+        <div style="font-size:12px;color:#8B85A8;margin-bottom:6px">${label}</div>
+        <div style="font-size:22px;font-weight:800;color:${col}">${val}</div>
+      </div>`;
 
-    doc.save(`takip_raporu_${activeDate}_${activeCamera}.pdf`);
+    const chartCard = (title, img) => img ? `
+      <div style="flex:1;background:#fff;border:1px solid #ECE8FB;border-radius:14px;padding:16px">
+        <div style="font-size:13px;font-weight:700;color:#1A1635;margin-bottom:8px">${title}</div>
+        <img src="${img}" style="width:100%;display:block"/>
+      </div>` : '';
+
+    // PDF için A4 genişliğine yakın, beyaz bir "rapor sayfası" oluştur
+    const sheet = document.createElement('div');
+    sheet.style.cssText = 'position:fixed;left:-99999px;top:0;width:820px;background:#fff;'
+      + 'font-family:\'Plus Jakarta Sans\',sans-serif;color:#1A1635;';
+    sheet.innerHTML = `
+      <div style="padding:0 0 28px 0">
+        <div style="height:10px;background:linear-gradient(90deg,#7060D0,#5E87D4)"></div>
+        <div style="padding:26px 36px 0 36px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,#7060D0,#5E87D4);display:flex;align-items:center;justify-content:center">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="10" r="2.5"/></svg>
+            </div>
+            <div>
+              <div style="font-size:22px;font-weight:800;letter-spacing:-.3px">Standalyze — Aktivite Raporu</div>
+              <div style="font-size:12px;color:#8B85A8;margin-top:2px">${labelCamera()}  ·  ${activeDate}  ·  ${whoLabel}</div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;margin-top:22px">
+            ${card('Toplam Analiz', fmtHM(totAll), '#7060D0')}
+            ${card('Toplam Ayakta', fmtHM(totStand), '#7060D0')}
+            ${card('Toplam Oturma', fmtHM(totSit), '#D06080')}
+          </div>
+
+          <div style="display:flex;gap:12px;margin-top:14px">
+            ${chartCard('Genel Aktivite Dağılımı', donutImg)}
+            ${chartCard('Kişi Başı Toplam Süre', barImg)}
+          </div>
+
+          ${cmpImg ? `<div style="margin-top:14px">${chartCard(`Kişi Bazlı Karşılaştırma (${cmp.from} → ${cmp.to})`, cmpImg)}</div>` : ''}
+
+          <div style="margin-top:14px;background:#fff;border:1px solid #ECE8FB;border-radius:14px;overflow:hidden">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;text-align:center">
+              <thead>
+                <tr style="background:#7060D0;color:#fff">
+                  <th style="text-align:left;padding:11px 14px">Çalışan</th>
+                  <th style="padding:11px 14px">Ayakta</th>
+                  <th style="padding:11px 14px">Oturma</th>
+                  <th style="padding:11px 14px">Bilinmiyor</th>
+                  <th style="padding:11px 14px">Toplam</th>
+                </tr>
+              </thead>
+              <tbody>${tableRows || '<tr><td colspan="5" style="padding:14px;color:#8B85A8">Kayıt yok</td></tr>'}</tbody>
+            </table>
+          </div>
+
+          <div style="margin-top:18px;font-size:11px;color:#A89FD8">
+            Standalyze · ${new Date().toLocaleString('tr-TR')}
+          </div>
+        </div>
+      </div>`;
+    // tablo hücrelerine ortak stil
+    sheet.querySelectorAll('tbody td').forEach(td => td.style.cssText += ';padding:10px 14px;border-top:1px solid #F0EEF8');
+    sheet.querySelectorAll('tbody tr:nth-child(even)').forEach(tr => tr.style.background = '#FAF9FF');
+    document.body.appendChild(sheet);
+
+    try {
+      const canvas = await html2canvas(sheet, { scale: 2, backgroundColor: '#ffffff', useCORS: true, imageTimeout: 0 });
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ unit:'pt', format:'a4' });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const imgW  = pageW;
+      const imgH  = canvas.height * (pageW / canvas.width);
+      const data  = canvas.toDataURL('image/jpeg', 0.95);
+
+      let heightLeft = imgH;
+      let position = 0;
+      pdf.addImage(data, 'JPEG', 0, position, imgW, imgH);
+      heightLeft -= pageH;
+      while (heightLeft > 0) {
+        position = heightLeft - imgH;
+        pdf.addPage();
+        pdf.addImage(data, 'JPEG', 0, position, imgW, imgH);
+        heightLeft -= pageH;
+      }
+      pdf.save(`takip_raporu_${activeDate}_${activeCamera}.pdf`);
+    } catch (e) {
+      alert('PDF oluşturulurken hata oluştu: ' + e.message);
+    } finally {
+      document.body.removeChild(sheet);
+    }
   }
 
   /* ════════════════════════════════════════════════════════════════════
