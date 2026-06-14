@@ -9,10 +9,299 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Standalyze — Çalışan Listesi</title>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="app.css" />
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { height: 100%; font-family: 'Plus Jakarta Sans', sans-serif; background: #F0EEF8; color: #1A1635; overflow: hidden; }
 
+    .app { display: flex; height: 100vh; }
+
+    /* ── SIDEBAR ── */
+    .sidebar {
+      width: 240px; flex-shrink: 0;
+      background: linear-gradient(180deg, #6B5FD4 0%, #5E78D0 100%);
+      display: flex; flex-direction: column;
+      position: relative; overflow: hidden;
+    }
+    .sidebar::before {
+      content: ''; position: absolute; inset: 0;
+      background:
+        radial-gradient(ellipse at 80% 10%, rgba(255,255,255,0.12) 0%, transparent 50%),
+        radial-gradient(ellipse at 20% 90%, rgba(100,140,255,0.15) 0%, transparent 50%);
+      pointer-events: none;
+    }
+    .sidebar-top { padding: 1.6rem 1.4rem 1.2rem; border-bottom: 1px solid rgba(255,255,255,0.1); }
+    .brand { display: flex; align-items: center; gap: 10px; }
+    .brand-icon {
+      width: 36px; height: 36px;
+      background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .brand-icon svg { width: 18px; height: 18px; }
+    .brand-name { font-size: 17px; font-weight: 800; color: #fff; letter-spacing: -0.3px; }
+    .brand-name span { opacity: 0.7; }
+
+    .nav { flex: 1; padding: 1rem 0.8rem; display: flex; flex-direction: column; gap: 2px; }
+    .nav-section-label { font-size: 9px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.35); padding: 0.8rem 0.6rem 0.4rem; }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 12px; border-radius: 10px; cursor: pointer;
+      transition: background 0.15s; color: rgba(255,255,255,0.65);
+      font-size: 13px; font-weight: 400; text-decoration: none; position: relative;
+    }
+    .nav-item:hover { background: rgba(255,255,255,0.1); color: #fff; }
+    .nav-item.active { background: rgba(255,255,255,0.18); color: #fff; font-weight: 500; }
+    .nav-item.active::before {
+      content: ''; position: absolute; left: 0; top: 20%; bottom: 20%;
+      width: 3px; border-radius: 2px; background: #fff;
+    }
+    .nav-item svg { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.8; }
+    .nav-item.active svg { opacity: 1; }
+    .nav-badge { margin-left: auto; background: rgba(255,255,255,0.2); color: #fff; font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 100px; }
+    .nav-badge.red { background: #FF5A7A; }
+
+    .sidebar-bottom { padding: 1rem 0.8rem 1.4rem; border-top: 1px solid rgba(255,255,255,0.1); }
+    .user-card {
+      display: flex; align-items: center; gap: 10px; padding: 10px 12px;
+      border-radius: 10px; background: rgba(255,255,255,0.1); cursor: pointer;
+      transition: background 0.15s;
+    }
+    .user-card:hover { background: rgba(255,255,255,0.15); }
+    .user-avatar { width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg,#A890F0,#7EB8F0); display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; flex-shrink: 0; }
+    .user-name { font-size: 12px; font-weight: 500; color: #fff; }
+    .user-role { font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 1px; }
+    .user-card svg { width: 14px; height: 14px; color: rgba(255,255,255,0.4); margin-left: auto; }
+
+    /* ── MAIN ── */
+    .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+    .topbar {
+      height: 60px; flex-shrink: 0; background: #fff;
+      border-bottom: 1px solid #E8E4F4;
+      display: flex; align-items: center; padding: 0 1.8rem; gap: 1rem;
+    }
+    .topbar-title { font-size: 16px; font-weight: 700; color: #1A1635; }
+    .topbar-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .topbar-date { font-size: 12px; color: #8B85A8; }
+    .notif-btn {
+      width: 34px; height: 34px; background: #F0EEF8; border: none; border-radius: 8px;
+      display: flex; align-items: center; justify-content: center; cursor: pointer;
+      position: relative; transition: background 0.15s;
+    }
+    .notif-btn:hover { background: #E8E4F4; }
+    .notif-btn svg { width: 16px; height: 16px; color: #6B5FD4; }
+    .notif-dot { position: absolute; top: 6px; right: 6px; width: 7px; height: 7px; border-radius: 50%; background: #FF5A7A; border: 1.5px solid #fff; }
+
+    .content { flex: 1; overflow-y: auto; padding: 1.6rem 1.8rem; }
+    .content::-webkit-scrollbar { width: 4px; }
+    .content::-webkit-scrollbar-thumb { background: #C8C0E8; border-radius: 2px; }
+
+    /* ── PAGE HEADER ── */
+    .page-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 1.4rem;
+    }
+    .page-header h2 { font-size: 20px; font-weight: 800; letter-spacing: -0.3px; }
+    .page-header p { font-size: 13px; color: #8B85A8; margin-top: 2px; }
+
+    .header-actions { display: flex; gap: 8px; }
+
+    .btn-outline {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: 10px;
+      border: 1.5px solid #E0DAF8; background: #fff;
+      font-size: 12px; font-weight: 600; color: #7060D0;
+      cursor: pointer; transition: all 0.15s; font-family: inherit;
+    }
+    .btn-outline:hover { background: #EFECFF; border-color: #C8C0E8; }
+    .btn-outline svg { width: 14px; height: 14px; }
+
+    .btn-primary {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: 10px;
+      border: none; background: linear-gradient(135deg, #7060D0, #5E87D4);
+      font-size: 12px; font-weight: 600; color: #fff;
+      cursor: pointer; transition: all 0.15s; font-family: inherit;
+      box-shadow: 0 2px 12px rgba(112,96,208,0.3);
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 4px 18px rgba(112,96,208,0.4); }
+    .btn-primary svg { width: 14px; height: 14px; }
+
+    /* ── SEARCH & FILTER ── */
+    .toolbar {
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 1.2rem;
+    }
+    .search-wrap { position: relative; flex: 1; max-width: 320px; }
+    .search-wrap svg { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; color: #B0A8D0; pointer-events: none; }
+    .search-wrap input {
+      width: 100%; padding: 9px 12px 9px 36px;
+      background: #fff; border: 1.5px solid #E8E4F4;
+      border-radius: 10px; font-size: 13px;
+      font-family: inherit; color: #1A1635; outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+    .search-wrap input::placeholder { color: #B0A8D0; }
+    .search-wrap input:focus { border-color: #7060D0; box-shadow: 0 0 0 3px rgba(112,96,208,0.1); }
+
+    .filter-btn {
+      display: flex; align-items: center; gap: 6px;
+      padding: 9px 14px; border-radius: 10px;
+      border: 1.5px solid #E8E4F4; background: #fff;
+      font-size: 12px; font-weight: 500; color: #8B85A8;
+      cursor: pointer; font-family: inherit; transition: all 0.15s;
+    }
+    .filter-btn:hover { border-color: #C8C0E8; color: #7060D0; }
+    .filter-btn svg { width: 14px; height: 14px; }
+
+    .result-count { font-size: 12px; color: #8B85A8; margin-left: auto; }
+
+    /* ── EMPLOYEE GRID ── */
+    .emp-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 12px;
+    }
+
+    .emp-card {
+      background: #fff;
+      border: 1px solid #E8E4F4;
+      border-radius: 16px;
+      padding: 1.3rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .emp-card:hover {
+      border-color: #C8C0E8;
+      box-shadow: 0 4px 24px rgba(112,96,208,0.1);
+      transform: translateY(-2px);
+    }
+    .emp-card::before {
+      content: ''; position: absolute; top: 0; left: 0; right: 0;
+      height: 3px; opacity: 0; transition: opacity 0.2s;
+    }
+    .emp-card:hover::before { opacity: 1; }
+
+    .emp-card-top { display: flex; align-items: center; gap: 12px; margin-bottom: 1rem; }
+
+    .emp-avatar {
+      width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; font-weight: 700; color: #fff;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+
+    .emp-info {}
+    .emp-name { font-size: 15px; font-weight: 700; color: #1A1635; }
+    .emp-id   { font-size: 11px; color: #8B85A8; margin-top: 2px; }
+
+    .emp-status {
+      margin-left: auto;
+      display: flex; align-items: center; gap: 5px;
+      font-size: 11px; font-weight: 600;
+      padding: 4px 10px; border-radius: 100px;
+    }
+    .emp-status::before { content:''; width:6px; height:6px; border-radius:50%; }
+    .emp-status.active { background:#EDFFF6; color:#16A34A; }
+    .emp-status.active::before { background:#16A34A; box-shadow:0 0 5px rgba(22,163,74,0.5); animation: blink 2s infinite; }
+    .emp-status.offline { background:#F5F3FF; color:#8B85A8; }
+    .emp-status.offline::before { background:#C0BAD8; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+    /* activity bars */
+    .activity-bars { display: flex; flex-direction: column; gap: 7px; }
+
+    .act-row { display: flex; align-items: center; gap: 8px; }
+    .act-label { font-size: 11px; color: #8B85A8; width: 52px; flex-shrink: 0; }
+    .act-bar-bg { flex: 1; height: 6px; background: #F0EEF8; border-radius: 3px; overflow: hidden; }
+    .act-bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s cubic-bezier(.22,1,.36,1); }
+    .act-pct { font-size: 11px; font-weight: 600; width: 34px; text-align: right; }
+
+    .bar-standing { background: linear-gradient(90deg, #7060D0, #9080E0); }
+    .bar-walking  { background: linear-gradient(90deg, #5E87D4, #7EB8F0); }
+    .bar-sitting  { background: linear-gradient(90deg, #D06080, #F090A0); }
+
+    .emp-card-footer {
+      margin-top: 1rem; padding-top: 0.9rem;
+      border-top: 1px solid #F0EEF8;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .total-time { font-size: 12px; color: #8B85A8; }
+    .total-time strong { color: #7060D0; font-weight: 700; }
+
+    .detail-btn {
+      font-size: 11px; font-weight: 600; color: #7060D0;
+      background: #EFECFF; border: none; border-radius: 7px;
+      padding: 4px 10px; cursor: pointer; font-family: inherit;
+      transition: background 0.15s;
+    }
+    .detail-btn:hover { background: #E0DAF8; }
+
+    /* ── MODAL ── */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 100;
+      background: rgba(26,22,53,0.5); backdrop-filter: blur(4px);
+      align-items: center; justify-content: center; padding: 2rem;
+    }
+    .modal-overlay.open { display: flex; }
+
+    .modal {
+      background: #fff; border-radius: 20px; width: 100%; max-width: 480px;
+      box-shadow: 0 24px 80px rgba(60,40,140,0.3);
+      animation: modalIn 0.3s cubic-bezier(.22,1,.36,1);
+      overflow: hidden;
+    }
+    @keyframes modalIn { from{opacity:0;transform:translateY(20px) scale(0.97)} to{opacity:1;transform:none} }
+
+    .modal-header {
+      padding: 1.5rem 1.5rem 1rem;
+      border-bottom: 1px solid #F0EEF8;
+      display: flex; align-items: center; gap: 14px;
+    }
+    .modal-avatar { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; color: #fff; }
+    .modal-name { font-size: 20px; font-weight: 800; color: #1A1635; }
+    .modal-sub  { font-size: 12px; color: #8B85A8; margin-top: 3px; }
+    .modal-close { margin-left: auto; width: 32px; height: 32px; border-radius: 8px; border: none; background: #F0EEF8; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #8B85A8; transition: background 0.15s; }
+    .modal-close:hover { background: #E8E4F4; }
+    .modal-close svg { width: 16px; height: 16px; }
+
+    .modal-body { padding: 1.3rem 1.5rem 1.5rem; }
+
+    .modal-stats {
+      display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 1.3rem;
+    }
+    .mstat {
+      background: #F8F7FF; border-radius: 12px; padding: 12px;
+      text-align: center;
+    }
+    .mstat-val { font-size: 18px; font-weight: 800; color: #7060D0; }
+    .mstat-lbl { font-size: 10px; color: #8B85A8; margin-top: 3px; font-weight: 500; }
+
+    .modal-section-title { font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #8B85A8; margin-bottom: 10px; }
+
+    .modal-bars { display: flex; flex-direction: column; gap: 10px; }
+    .modal-bar-row { display: flex; align-items: center; gap: 10px; }
+    .modal-bar-label { font-size: 12px; color: #1A1635; font-weight: 500; width: 64px; flex-shrink: 0; }
+    .modal-bar-bg { flex: 1; height: 8px; background: #F0EEF8; border-radius: 4px; overflow: hidden; }
+    .modal-bar-fill { height: 100%; border-radius: 4px; }
+    .modal-bar-pct { font-size: 12px; font-weight: 700; color: #7060D0; width: 38px; text-align: right; }
+    .modal-bar-sec { font-size: 11px; color: #8B85A8; width: 48px; text-align: right; }
+
+    /* ── ADD EMPLOYEE FORM ── */
+    .form-field { margin-bottom: 12px; }
+    .form-field label { display:block; font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:#8B85A8; margin-bottom:6px; }
+    .form-field input { width:100%; padding:10px 12px; background:#F8F7FF; border:1.5px solid #E8E4F4; border-radius:10px; font-size:13px; font-family:inherit; color:#1A1635; outline:none; transition:border-color 0.2s; }
+    .form-field input:focus { border-color:#7060D0; background:#fff; }
+    .section-label { font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#8B85A8; margin:1rem 0 10px; }
+    .pct-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+    .add-note { font-size:12px; font-weight:600; min-height:16px; margin-top:8px; }
+    .add-note.ok { color:#16A34A; }
+    .add-note.err { color:#C03050; }
+    .modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:1.2rem; }
+  </style>
 </head>
-<body class="page-employees">
+<body>
 <div class="app">
 
   <!-- SIDEBAR -->
@@ -150,8 +439,8 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" style="width:24px;height:24px"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
       </div>
       <div>
-        <div class="modal-name" style="font-size:18px">Yeni Çalışan Ekle</div>
-        <div class="modal-sub">Listeye yeni bir çalışan kaydet</div>
+        <div class="modal-name" style="font-size:18px">Yeni Hesap Oluştur</div>
+        <div class="modal-sub">Cognito'da yeni bir kullanıcı hesabı aç</div>
       </div>
       <button class="modal-close" onclick="closeAddDirect()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -159,28 +448,17 @@
     </div>
     <div class="modal-body">
       <div class="form-field">
-        <label>İsim *</label>
-        <input id="newName" type="text" placeholder="örn. ahmet" autocomplete="off" />
+        <label>Kullanıcı Adı *</label>
+        <input id="newName" type="text" placeholder="örn. ahmet (tek kelime, küçük harf)" autocomplete="off" />
       </div>
       <div class="form-field">
-        <label>E-posta * <span style="font-weight:400;color:#8B85A8">(giriş hesabı için)</span></label>
+        <label>E-posta *</label>
         <input id="newEmail" type="email" placeholder="ahmet@firma.com" autocomplete="off" />
-      </div>
-      <div class="form-field">
-        <label>Görev / Alan</label>
-        <input id="newArea" type="text" placeholder="Cam7 · Çalışma Alanı" autocomplete="off" />
-      </div>
-      <div class="section-label">Aktivite (opsiyonel)</div>
-      <div class="pct-grid">
-        <div class="form-field" style="margin-bottom:0"><label>Ayakta %</label><input id="newStanding" type="number" min="0" max="100" placeholder="0" /></div>
-        <div class="form-field" style="margin-bottom:0"><label>Yürüme %</label><input id="newWalking" type="number" min="0" max="100" placeholder="0" /></div>
-        <div class="form-field" style="margin-bottom:0;margin-top:10px"><label>Oturma %</label><input id="newSitting" type="number" min="0" max="100" placeholder="0" /></div>
-        <div class="form-field" style="margin-bottom:0;margin-top:10px"><label>Toplam Süre (dk)</label><input id="newTotal" type="number" min="0" placeholder="0" /></div>
       </div>
       <div class="add-note" id="addNote"></div>
       <div class="modal-actions">
         <button class="btn-outline" onclick="closeAddDirect()">İptal</button>
-        <button class="btn-primary" onclick="saveNewEmployee()">Ekle</button>
+        <button class="btn-primary" onclick="saveNewEmployee()">Hesap Oluştur</button>
       </div>
     </div>
   </div>
@@ -408,66 +686,39 @@
   function closeAdd(e) { if (e.target === document.getElementById('addOverlay')) closeAddDirect(); }
   function closeAddDirect() { document.getElementById('addOverlay').classList.remove('open'); }
 
-  function clampPct(v) { let n = parseFloat(v) || 0; if (n < 0) n = 0; if (n > 100) n = 100; return +n.toFixed(1); }
-
   // Cognito kullanıcı oluşturma endpoint'i (API Gateway + Lambda)
   const CREATE_USER_URL = `${API_URL}/create-user`;
 
   async function saveNewEmployee() {
-    const name  = document.getElementById('newName').value.trim();
+    const name  = document.getElementById('newName').value.trim().toLowerCase();
     const email = document.getElementById('newEmail').value.trim();
-    const area  = document.getElementById('newArea').value.trim();
     const note  = document.getElementById('addNote');
     const show  = (m, ok) => { note.textContent = m; note.className = 'add-note ' + (ok ? 'ok' : 'err'); };
 
-    if (!name) return show('İsim zorunludur.', false);
+    if (!name) return show('Kullanıcı adı zorunludur.', false);
     if (/\s/.test(name)) return show('Kullanıcı adı boşluk içeremez (tek kelime yazın).', false);
-    if (!email) return show('E-posta zorunludur (giriş hesabı için).', false);
-    if (allEmployees.some(e => e.name.toLowerCase() === name.toLowerCase()))
-      return show('Bu isimde bir çalışan zaten var.', false);
+    if (!email) return show('E-posta zorunludur.', false);
 
-    const sp  = clampPct(document.getElementById('newStanding').value);
-    const wp  = clampPct(document.getElementById('newWalking').value);
-    const stp = clampPct(document.getElementById('newSitting').value);
-    const sum = +(sp + wp + stp).toFixed(1);
-    if (sum > 100) return show('Yüzdelerin toplamı 100\'ü geçemez.', false);
-
-    // 1) Cognito hesabını oluştur (sunucu tarafı / Lambda)
     show('Hesap oluşturuluyor…', true);
-    let tempPassword;
     try {
       const token = await Auth.idToken();                 // admin'in giriş token'ı
       const res = await fetch(CREATE_USER_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ username: name.toLowerCase(), email })
+        body: JSON.stringify({ username: name, email })
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.message || 'Hesap oluşturulamadı.');
-      tempPassword = data.tempPassword;
+
+      document.getElementById('newName').value = '';
+      document.getElementById('newEmail').value = '';
+      closeAddDirect();
+      alert('✓ Hesap oluşturuldu.\n\nKullanıcı adı: ' + name +
+            '\nGeçici şifre: ' + (data.tempPassword || '(e-posta ile gönderildi)') +
+            '\n\nKişiye iletin; ilk girişte kendi şifresini belirleyecek. Davet e-postası da gönderildi.');
     } catch (err) {
-      return show('Hesap oluşturulamadı: ' + err.message, false);
+      show('Hesap oluşturulamadı: ' + err.message, false);
     }
-
-    // 2) Görüntü/rapor kaydını yerel listeye ekle (mevcut davranış)
-    const up = +(100 - sum).toFixed(1);
-    const totalSec = Math.max(0, parseFloat(document.getElementById('newTotal').value) || 0) * 60;
-    const mk = pct => ({ seconds: +(totalSec * pct / 100).toFixed(1), percent: pct });
-    const acts = {
-      standing: mk(sp), walking: mk(wp), sitting: mk(stp),
-      unknown: { seconds: +(totalSec * up / 100).toFixed(1), percent: up }
-    };
-    extras.push({ name, area: area || 'Manuel kayıt', acts });
-    localStorage.setItem('extraEmployees', JSON.stringify(extras));
-
-    ['newName','newEmail','newArea','newStanding','newWalking','newSitting','newTotal']
-      .forEach(id => document.getElementById(id).value = '');
-    closeAddDirect();
-    loadData();
-
-    alert('✓ Çalışan eklendi.\n\nKullanıcı adı: ' + name.toLowerCase() +
-          '\nGeçici şifre: ' + (tempPassword || '(e-posta ile gönderildi)') +
-          '\n\nKişiye iletin; ilk girişte kendi şifresini belirleyecek. Davet e-postası da gönderildi.');
   }
 
   function removeEmployee(name) {
