@@ -143,6 +143,36 @@ const Auth = {
     });
   },
 
+  /* "Şifremi unuttum" — kullanıcının e-postasına doğrulama kodu gönderir.
+     E-postanın Cognito'da DOĞRULANMIŞ (email_verified=true) olması gerekir. */
+  forgotPassword(username) {
+    return new Promise((resolve, reject) => {
+      const user = new AmazonCognitoIdentity.CognitoUser({
+        Username: username.toLowerCase().trim(),
+        Pool: _pool,
+      });
+      user.forgotPassword({
+        onSuccess: () => resolve({ status: 'DONE' }),
+        inputVerificationCode: (data) => resolve({ status: 'CODE_SENT', data }),
+        onFailure: (err) => reject(err),
+      });
+    });
+  },
+
+  /* Gelen kod + yeni şifre ile sıfırlamayı tamamlar. */
+  confirmForgotPassword(username, code, newPassword) {
+    return new Promise((resolve, reject) => {
+      const user = new AmazonCognitoIdentity.CognitoUser({
+        Username: username.toLowerCase().trim(),
+        Pool: _pool,
+      });
+      user.confirmPassword(code, newPassword, {
+        onSuccess: () => resolve({ status: 'OK' }),
+        onFailure: (err) => reject(err),
+      });
+    });
+  },
+
   /* Giriş yapmış kullanıcı için şifre değiştirme (settings.html'de kullan). */
   changePassword(oldPass, newPass) {
     return new Promise((resolve, reject) => {
@@ -156,8 +186,7 @@ const Auth = {
   },
 
   /* Çıkış. */
-  logout() {
-    const user = _pool.getCurrentUser();
+  logout() {    const user = _pool.getCurrentUser();
     if (user) user.signOut();
     sessionStorage.clear();
     location.replace('index.html');
