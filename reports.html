@@ -473,36 +473,42 @@
 
   async function loadData() {
     const ds = document.getElementById('dataSource');
+    const apiConfigured = API_URL && !API_URL.includes('XXXX');
 
-    // 1) Önce seçili GÜN için DynamoDB/API dene (gerçek gün bazlı veri)
-    const apiDay = await fetchDayFromApi();
-    if (apiDay && isReportData(apiDay.merged || apiDay.CAM7 || apiDay.CAM8 || apiDay)) {
-      currentData = resolveReportData(apiDay);
-      ds.textContent = `● AWS Günlük Veri · ${trDay(activeDate)} (${labelCamera()})`;
-      ds.style.color = '#16A34A';
+    // Gün bazlı TEK doğru kaynak: API (DynamoDB). Yapılandırılmışsa belirleyici olan odur.
+    if (apiConfigured) {
+      const apiDay = await fetchDayFromApi();
+      if (apiDay && isReportData(apiDay.merged || apiDay.CAM7 || apiDay.CAM8 || apiDay)) {
+        currentData = resolveReportData(apiDay);
+        ds.textContent = `● AWS Günlük Veri · ${trDay(activeDate)} (${labelCamera()})`;
+        ds.style.color = '#16A34A';
+      } else {
+        // O güne ait kayıt YOK → tarihsiz S3'e DÜŞME, boş göster
+        currentData = {};
+        ds.textContent = `● ${trDay(activeDate)} — bu güne ait kayıt yok`;
+        ds.style.color = '#C03050';
+      }
       renderView();
       syncCompareControls();
       return;
     }
 
-    // 2) Yedek: mevcut S3 toplu raporu (gün ayrımı yok)
+    // API HİÇ yapılandırılmamışsa: tarih filtresi yok; tarihsiz toplu veriyi açıkça öyle etiketle
     const [c7, c8] = await Promise.all([
       fetchReportJson('cam7_report.json'),
       fetchReportJson('cam8_report.json'),
     ]);
 
-    let raw;
     if (c7 || c8) {
-      raw = { CAM7: c7 || {}, CAM8: c8 || {}, merged: mergeReports(c7, c8) };
-      ds.textContent = `● AWS Toplu Veri (${labelCamera()}) · gün filtresi için API gerekli`;
+      currentData = resolveReportData({ CAM7: c7 || {}, CAM8: c8 || {}, merged: mergeReports(c7, c8) });
+      ds.textContent = `● AWS Toplu Veri (${labelCamera()}) · gün filtresi yok`;
       ds.style.color = '#D97706';
     } else {
-      raw = { merged: FALLBACK, CAM7: FALLBACK, CAM8: {} };
-      ds.textContent = `● Yerel Örnek Veri · ${trDay(activeDate)}`;
-      ds.style.color = '#D97706';
+      currentData = {};
+      ds.textContent = `● Veri kaynağı bağlı değil`;
+      ds.style.color = '#C03050';
     }
 
-    currentData = resolveReportData(raw);
     renderView();
     syncCompareControls();
   }
