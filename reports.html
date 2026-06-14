@@ -420,7 +420,7 @@
   function buildReportsUrl() {
     // Artık periyot yerine SEÇİLİ GÜN gönderilir (gün bazlı filtre).
     const params = new URLSearchParams({ camera: activeCamera, date: activeDate });
-    return `${API_URL}/reports?${params.toString()}`;
+    return `${API_URL}/standalyze-get-reports?${params.toString()}`;
   }
 
   // Seçili gün için DynamoDB'den (API Gateway üzerinden) rapor çek.
@@ -787,7 +787,7 @@
     if (!API_URL || API_URL.includes('XXXX')) return null;
     try {
       const params = new URLSearchParams({ worker:name, from, to, camera:activeCamera });
-      const r = await fetch(`${API_URL}/series?${params.toString()}`, { headers:{ 'Accept':'application/json' } });
+      const r = await fetch(`${API_URL}/standalyze-series?${params.toString()}`, { headers:{ 'Accept':'application/json' } });
       if (!r.ok) return null;
       const j = await r.json();
       const days = (j && (j.days || j.items)) || null;
