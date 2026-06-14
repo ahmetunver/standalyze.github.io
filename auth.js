@@ -61,10 +61,13 @@ const Auth = {
   setNewPassword(newPassword) {
     return new Promise((resolve, reject) => {
       if (!_pending) return reject({ code: 'NoPendingUser' });
-      // Boş string attribute'ları çıkar — Cognito boş email gibi değerleri reddeder
-      const attrs = {};
+      // Cognito'nun verdiği attribute'lardan değiştirilemez olanları çıkar
+      const skip = ['email', 'email_verified', 'phone_number_verified', 'sub'];
       const raw = _pending._requiredAttrs || {};
-      Object.keys(raw).forEach(k => { if (raw[k] !== '' && raw[k] != null) attrs[k] = raw[k]; });
+      const attrs = {};
+      Object.keys(raw).forEach(k => {
+        if (!skip.includes(k) && raw[k] !== '' && raw[k] != null) attrs[k] = raw[k];
+      });
       _pending.completeNewPasswordChallenge(newPassword, attrs, {
         onSuccess: (session) => { const u = _pending; _pending = null; resolve(Object.assign({ status: 'OK' }, Auth._apply(u, session))); },
         onFailure: (err) => reject(err),
