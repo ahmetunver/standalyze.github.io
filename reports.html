@@ -308,13 +308,17 @@
     from: null, to: null,
   };
 
-  // ── Tarih yardımcıları ──
-  function isoToday(){ return new Date().toISOString().slice(0,10); }
-  function isoShift(days){ const d=new Date(); d.setDate(d.getDate()+days); return d.toISOString().slice(0,10); }
+  // ── Tarih yardımcıları (YEREL saat — UTC kaymasını önler) ──
+  function ymd(d){
+    const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}`;
+  }
+  function isoToday(){ return ymd(new Date()); }
+  function isoShift(days){ const d=new Date(); d.setDate(d.getDate()+days); return ymd(d); }
   function dateRange(from, to){
     const out=[]; const d=new Date(from+'T00:00:00'); const end=new Date(to+'T00:00:00');
     let guard=0;
-    while(d<=end && guard++<400){ out.push(d.toISOString().slice(0,10)); d.setDate(d.getDate()+1); }
+    while(d<=end && guard++<400){ out.push(ymd(d)); d.setDate(d.getDate()+1); }
     return out;
   }
   function trDay(iso){ const d=new Date(iso+'T00:00:00'); return d.toLocaleDateString('tr-TR',{day:'2-digit',month:'short'}); }
