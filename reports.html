@@ -426,10 +426,18 @@
   // Seçili gün için DynamoDB'den (API Gateway üzerinden) rapor çek.
   // Beklenen yanıt: { merged:{...}, CAM7:{...}, CAM8:{...} }  (rapor-şekilli)
   // API bağlı değilse null döner → S3 yedeğine düşülür.
+  // Korumalı API çağrıları için ID token'ı Authorization başlığına ekle
+  async function authHeader() {
+    try {
+      const t = await Auth.idToken();
+      return t ? { 'Authorization': 'Bearer ' + t } : {};
+    } catch (e) { return {}; }
+  }
+
   async function fetchDayFromApi() {
     if (!API_URL || API_URL.includes('XXXX')) return null;
     try {
-      const r = await fetch(buildReportsUrl(), { headers: { 'Accept': 'application/json' } });
+      const r = await fetch(buildReportsUrl(), { headers: { 'Accept': 'application/json', ...(await authHeader()) } });
       if (!r.ok) return null;
       const j = await r.json();
       return (j && typeof j === 'object') ? j : null;
@@ -793,7 +801,7 @@
     if (!API_URL || API_URL.includes('XXXX')) return null;
     try {
       const params = new URLSearchParams({ worker:name, from, to, camera:activeCamera });
-      const r = await fetch(`${API_URL}/standalyze-series?${params.toString()}`, { headers:{ 'Accept':'application/json' } });
+      const r = await fetch(`${API_URL}/standalyze-series?${params.toString()}`, { headers:{ 'Accept':'application/json', ...(await authHeader()) } });
       if (!r.ok) return null;
       const j = await r.json();
       const days = (j && (j.days || j.items)) || null;
