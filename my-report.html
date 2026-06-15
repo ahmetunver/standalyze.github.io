@@ -10,8 +10,18 @@
   <title>Standalyze — Takip Raporum</title>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-    <link rel="stylesheet" href="app.css" />
-
+  <link rel="stylesheet" href="app.css" />
+  <style>
+    /* Üst bardaki tarih seçici (reports.html ile aynı görünüm) */
+    body.page-my-report input[type="date"]{
+      border:1.5px solid #E0DAF8; border-radius:8px; padding:6px 10px;
+      font-size:12px; font-family:inherit; color:#1A1635; background:#fff; outline:none;
+      cursor:pointer; transition:border-color .2s, box-shadow .2s;
+    }
+    body.page-my-report input[type="date"]:focus{
+      border-color:#7060D0; box-shadow:0 0 0 3px rgba(112,96,208,.12);
+    }
+  </style>
 </head>
 <body class="page-my-report">
 <div class="app">
@@ -50,13 +60,8 @@
       <div class="topbar-title">Takip Raporum</div>
       <div class="topbar-right">
         <span id="dataSource" style="font-size:11px;font-weight:600;color:#8B85A8">● Yükleniyor...</span>
-        <!-- Rapor periyodu seçici -->
-        <div style="display:flex;gap:2px;background:rgba(112,96,208,0.08);border-radius:8px;padding:3px;">
-          <button class="period-btn" data-period="daily" onclick="setPeriod('daily')" style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:600;background:rgba(112,96,208,0.12);color:#6B5FD4;">Günlük</button>
-          <button class="period-btn" data-period="weekly" onclick="setPeriod('weekly')" style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:400;background:transparent;color:#6B5FD4;">Haftalık</button>
-          <button class="period-btn" data-period="monthly" onclick="setPeriod('monthly')" style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:400;background:transparent;color:#6B5FD4;">Aylık</button>
-          <button class="period-btn" data-period="yearly" onclick="setPeriod('yearly')" style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:400;background:transparent;color:#6B5FD4;">Yıllık</button>
-        </div>
+        <!-- Tarih seçici (gün bazlı) -->
+        <input type="date" id="datePicker" onchange="onDateChange()" />
         <span class="topbar-date" id="dateStr"></span>
       </div>
     </div>
@@ -65,7 +70,7 @@
       <div class="page-header">
         <div>
           <h2 id="greeting">Merhaba 👋</h2>
-          <p id="pageSubtitle">Cam7 · Çalışma Alanı · kişisel aktivite özetin yükleniyor...</p>
+          <p id="pageSubtitle">Kişisel aktivite özetin yükleniyor...</p>
         </div>
         <div class="header-actions">
           <button class="btn-outline" onclick="exportCSV()">
@@ -88,7 +93,7 @@
           <div class="panel-header">
             <div>
               <div class="panel-title">Kişisel Aktivite Dağılımı</div>
-              <div class="panel-sub">Bugünkü toplam sürenin dağılımı</div>
+              <div class="panel-sub">Seçili günün toplam süre dağılımı</div>
             </div>
           </div>
           <canvas id="donutChart"></canvas>
@@ -110,34 +115,33 @@
 </div>
 
 <script>
-  // ── Aynı veri kaynağı (sunucu yoksa yerel yedek) ──
+  // ── Sunucu/veri yoksa yerel yedek (yalnızca API hiç yapılandırılmadıysa kullanılır) ──
   const FALLBACK = {"berk":{"sitting":{"seconds":12.5,"percent":4.0},"standing":{"seconds":205.7,"percent":65.0},"unknown":{"seconds":7.2,"percent":2.3},"walking":{"seconds":90.9,"percent":28.7}},"kadir":{"sitting":{"seconds":270.6,"percent":13.2},"standing":{"seconds":1346.2,"percent":65.9},"unknown":{"seconds":46.9,"percent":2.3},"walking":{"seconds":379.6,"percent":18.6}},"sevcan":{"sitting":{"seconds":179.2,"percent":11.4},"standing":{"seconds":1034.5,"percent":65.5},"unknown":{"seconds":31.9,"percent":2.0},"walking":{"seconds":332.9,"percent":21.1}},"mabed":{"sitting":{"seconds":97.6,"percent":20.1},"standing":{"seconds":282.0,"percent":58.0},"unknown":{"seconds":9.0,"percent":1.9},"walking":{"seconds":97.4,"percent":20.0}},"mazhar":{"sitting":{"seconds":21.0,"percent":7.5},"standing":{"seconds":187.3,"percent":67.3},"unknown":{"seconds":6.2,"percent":2.2},"walking":{"seconds":63.7,"percent":22.9}},"kevser":{"sitting":{"seconds":2.7,"percent":2.6},"standing":{"seconds":62.7,"percent":60.9},"unknown":{"seconds":3.5,"percent":3.4},"walking":{"seconds":34.1,"percent":33.1}},"sevgi":{"sitting":{"seconds":12.0,"percent":16.0},"standing":{"seconds":35.4,"percent":47.1},"unknown":{"seconds":2.2,"percent":2.9},"walking":{"seconds":25.6,"percent":34.1}}};
 
-  const PERIODS = { daily:'Günlük', weekly:'Haftalık', monthly:'Aylık', yearly:'Yıllık' };
-  let activePeriod = 'daily';
+  // ── Kaynaklar: reports.html ile AYNI gün bazlı API ──
+  const API_URL    = 'https://y4ubflxdcc.execute-api.eu-central-1.amazonaws.com';
+  const S3_REPORTS = 'https://standalyze-2026.s3.eu-central-1.amazonaws.com/reports';
+
   let donutChart = null;
 
-  const USER = sessionStorage.getItem('user') || (window.Auth && Auth.usernameSync && Auth.usernameSync()) || '';  // giriş yapan çalışan
+  // Giriş yapan çalışan (yalnızca kendi verisini görür)
+  const USER = sessionStorage.getItem('user') || (window.Auth && Auth.usernameSync && Auth.usernameSync()) || '';
   const CAP  = USER ? USER.charAt(0).toUpperCase() + USER.slice(1) : 'Çalışan';
 
-  document.getElementById('dateStr').textContent = new Date().toLocaleDateString('tr-TR', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
-  document.getElementById('navName').textContent = CAP;
+  // ── Tarih yardımcıları ──
+  function isoToday(){ return new Date().toISOString().slice(0,10); }
+  let activeDate = isoToday();                     // seçili gün (varsayılan: bugün)
+  function trDay(iso){ const d=new Date(iso+'T00:00:00'); return d.toLocaleDateString('tr-TR',{day:'2-digit',month:'short',year:'numeric'}); }
+
+  document.getElementById('dateStr').textContent  = new Date().toLocaleDateString('tr-TR', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
+  document.getElementById('navName').textContent  = CAP;
   document.getElementById('navAvatar').textContent = (USER || '--').slice(0,2).toUpperCase();
 
-  function logout() {
-    Auth.logout();
-  }
+  function logout() { Auth.logout(); }
 
-  function labelPeriod(period = activePeriod) {
-    return PERIODS[period] || PERIODS.daily;
-  }
-
-  function setPeriod(period) {
-    activePeriod = period;
-    document.querySelectorAll('.period-btn').forEach(b => {
-      b.style.fontWeight = b.dataset.period === period ? '600' : '400';
-      b.style.background = b.dataset.period === period ? 'rgba(112,96,208,0.12)' : 'transparent';
-    });
+  // Tarih değişince o güne ait raporu yeniden çek
+  function onDateChange(){
+    activeDate = document.getElementById('datePicker').value || isoToday();
     loadData();
   }
 
@@ -150,7 +154,6 @@
   function hasActivity(obj) {
     return obj && typeof obj === 'object' && obj.standing && obj.walking && obj.sitting && obj.unknown;
   }
-
   function isReportData(obj) {
     return obj && typeof obj === 'object' && Object.values(obj).some(hasActivity);
   }
@@ -172,37 +175,41 @@
         return sum + Number(item.seconds ?? person[`${key}_seconds`] ?? 0);
       }, 0);
       result[name] = {
-        sitting: normalizeActivity(person, 'sitting', totalSeconds),
+        sitting:  normalizeActivity(person, 'sitting',  totalSeconds),
         standing: normalizeActivity(person, 'standing', totalSeconds),
-        walking: normalizeActivity(person, 'walking', totalSeconds),
-        unknown: normalizeActivity(person, 'unknown', totalSeconds),
+        walking:  normalizeActivity(person, 'walking',  totalSeconds),
+        unknown:  normalizeActivity(person, 'unknown',  totalSeconds),
       };
     });
     return result;
   }
 
-  function resolveReportData(raw, period = activePeriod) {
-    if (!raw || typeof raw !== 'object') return normalizeReport(FALLBACK);
-
-    const periodBlock =
-      raw[period] ||
-      (raw.periods && raw.periods[period]) ||
-      (raw.reports && raw.reports[period]) ||
-      (raw.data && raw.data[period]);
-
-    let block = periodBlock || raw;
-
-    if (block && block.data && !isReportData(block) && typeof block.data === 'object') {
-      block = block.data;
-    }
-
-    const data = block.merged || block.both || block.BOTH || (block.data && isReportData(block.data) ? block.data : null) || (isReportData(block) ? block : null);
-    return normalizeReport(data || FALLBACK);
+  // ── Gün bazlı API (DynamoDB üzerinden) ──
+  // Beklenen yanıt: { merged:{...}, CAM7:{...}, CAM8:{...} }
+  function buildReportsUrl() {
+    const params = new URLSearchParams({ camera: 'both', date: activeDate });
+    return `${API_URL}/standalyze-get-reports?${params.toString()}`;
+  }
+  async function fetchDayFromApi() {
+    if (!API_URL || API_URL.includes('XXXX')) return null;
+    try {
+      const r = await fetch(buildReportsUrl(), { headers: { 'Accept': 'application/json' } });
+      if (!r.ok) return null;
+      const j = await r.json();
+      return (j && typeof j === 'object') ? j : null;
+    } catch (e) { return null; }
   }
 
-  // ── AWS S3 RAPOR KAYNAĞI ────────────────────────────────────────────
-  const S3_REPORTS = 'https://standalyze-2026.s3.eu-central-1.amazonaws.com/reports';
+  // API yanıtını (merged / CAM7+CAM8) isim bazlı normalize veriye çevir
+  function resolveDay(raw) {
+    if (!raw || typeof raw !== 'object') return {};
+    let block = raw;
+    if (block.data && !isReportData(block) && typeof block.data === 'object') block = block.data;
+    const data = block.merged || block.both || block.BOTH || (isReportData(block) ? block : null);
+    return normalizeReport(data || {});
+  }
 
+  // ── Yalnızca API hiç yapılandırılmadığında kullanılan tarihsiz S3 yedeği ──
   async function fetchReportJson(key) {
     try {
       const r = await fetch(`${S3_REPORTS}/${key}?_=${Date.now()}`);
@@ -220,43 +227,67 @@
           const sec = (v && typeof v.seconds === 'number') ? v.seconds
                     : (typeof v === 'number' ? v : 0);
           out[name][act] = out[name][act] || { seconds: 0, percent: 0 };
-          out[name][act].seconds += sec;
+          // İki kamera aynı kişiyi görebilir → toplama değil, maksimum (çift sayımı önle)
+          out[name][act].seconds = Math.max(out[name][act].seconds, sec);
         }
       }
     }
     return out;
   }
-  // ────────────────────────────────────────────────────────────────────
+
+  // ── Boş durum (o güne ait kayıt yoksa) ──
+  function showEmpty(msg) {
+    document.getElementById('greeting').textContent = `Merhaba, ${CAP}`;
+    document.getElementById('pageSubtitle').textContent = msg;
+    document.getElementById('statRow').innerHTML =
+      '<div class="panel" style="grid-column:1/-1;text-align:center;color:#8B85A8;font-size:13px">Kayıt bulunamadı.</div>';
+    document.getElementById('barList').innerHTML = '';
+    if (donutChart) { donutChart.destroy(); donutChart = null; }
+    window.__me = null;
+  }
 
   async function loadData() {
     const ds = document.getElementById('dataSource');
-    const [c7, c8] = await Promise.all([
-      fetchReportJson('cam7_report.json'),
-      fetchReportJson('cam8_report.json'),
-    ]);
+    const apiConfigured = API_URL && !API_URL.includes('XXXX');
 
-    let data;
-    if (c7 || c8) {
-      // İki kamerayı birleştir → çalışan hangi kamerada görünmüşse dahil
-      data = normalizeReport(mergeReports(c7, c8));
-      ds.textContent = '● AWS Canlı Veri';
-      ds.style.color = '#16A34A';
+    let data = {};
+
+    if (apiConfigured) {
+      // Gün bazlı TEK doğru kaynak: API
+      const apiDay = await fetchDayFromApi();
+      if (apiDay && isReportData(apiDay.merged || apiDay.CAM7 || apiDay.CAM8 || apiDay)) {
+        data = resolveDay(apiDay);
+        ds.textContent = `● AWS Günlük Veri · ${trDay(activeDate)}`;
+        ds.style.color = '#16A34A';
+      } else {
+        // O güne ait kayıt yok → tarihsiz veriye DÜŞME
+        ds.textContent = `● ${trDay(activeDate)} — kayıt yok`;
+        ds.style.color = '#C03050';
+        showEmpty(`${trDay(activeDate)} için sana ait analiz verisi bulunmuyor.`);
+        return;
+      }
     } else {
-      data = normalizeReport(FALLBACK);
-      ds.textContent = `● Yerel Veri · ${labelPeriod()}`;
-      ds.style.color = '#D97706';
+      // API hiç yapılandırılmamış → tarihsiz S3 toplu (gün filtresi yok)
+      const [c7, c8] = await Promise.all([
+        fetchReportJson('cam7_report.json'),
+        fetchReportJson('cam8_report.json'),
+      ]);
+      if (c7 || c8) {
+        data = normalizeReport(mergeReports(c7, c8));
+        ds.textContent = `● AWS Toplu Veri · gün filtresi yok`;
+        ds.style.color = '#D97706';
+      } else {
+        ds.textContent = `● Veri kaynağı bağlı değil`;
+        ds.style.color = '#C03050';
+        showEmpty('Veri kaynağı bağlı değil.');
+        return;
+      }
     }
 
     // ── YALNIZCA giriş yapan çalışanın kendi verisi ──
     const me = data[USER];
     if (!me) {
-      document.getElementById('greeting').textContent = `Merhaba, ${CAP}`;
-      document.getElementById('pageSubtitle').textContent = `${labelPeriod()} aralıkta sana ait analiz verisi bulunmuyor.`;
-      document.getElementById('statRow').innerHTML =
-        '<div class="panel" style="grid-column:1/-1;text-align:center;color:#8B85A8;font-size:13px">Kayıt bulunamadı.</div>';
-      document.getElementById('barList').innerHTML = '';
-      if (donutChart) { donutChart.destroy(); donutChart = null; }
-      window.__me = null;
+      showEmpty(`${trDay(activeDate)} için sana ait analiz verisi bulunmuyor.`);
       return;
     }
 
@@ -268,11 +299,11 @@
 
     document.getElementById('greeting').textContent = `Merhaba, ${CAP} 👋`;
     document.getElementById('pageSubtitle').textContent =
-      `CAM7+CAM8 · ${labelPeriod()} kişisel rapor · toplam ${(total/60).toFixed(1)} dk analiz edildi`;
+      `CAM7+CAM8 · ${trDay(activeDate)} · kişisel rapor · toplam ${(total/60).toFixed(1)} dk analiz edildi`;
 
     // stat cards
     const stats = [
-      { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2" width="17" height="17"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`, label:'Toplam Süre', val:(total/60).toFixed(1)+'dk', sub:`${labelPeriod().toLowerCase()} analiz`, bg:'#F0FFF8', col:'#16A34A' },
+      { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2" width="17" height="17"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`, label:'Toplam Süre', val:(total/60).toFixed(1)+'dk', sub:trDay(activeDate), bg:'#F0FFF8', col:'#16A34A' },
       { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#7060D0" stroke-width="2" width="17" height="17"><circle cx="12" cy="5" r="3"/><line x1="12" y1="8" x2="12" y2="21"/><line x1="9" y1="12" x2="15" y2="12"/></svg>`, label:'Ayakta', val:Math.round(a.standing.percent)+'%', sub:secFmt(a.standing.seconds), bg:'#EFECFF', col:'#7060D0' },
       { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#5E87D4" stroke-width="2" width="17" height="17"><circle cx="12" cy="5" r="3"/><path d="M9 21l3-8 3 8"/><path d="M6 12l6 2 6-2"/></svg>`, label:'Yürüme', val:Math.round(a.walking.percent)+'%', sub:secFmt(a.walking.seconds), bg:'#EFF6FF', col:'#5E87D4' },
       { icon:`<svg viewBox="0 0 24 24" fill="none" stroke="#D06080" stroke-width="2" width="17" height="17"><path d="M3 18h18M6 18V9a6 6 0 0 1 12 0v9"/></svg>`, label:'Oturma', val:Math.round(a.sitting.percent)+'%', sub:secFmt(a.sitting.seconds), bg:'#FFF0F6', col:'#D06080' },
@@ -333,16 +364,18 @@
     if (!a) return;
     const total = a.standing.seconds + a.walking.seconds + a.sitting.seconds + a.unknown.seconds;
     const rows = [
-      ['Periyot','İsim','Ayakta(s)','Ayakta(%)','Yürüme(s)','Yürüme(%)','Oturma(s)','Oturma(%)','Bilinmiyor(s)','Toplam(s)'],
-      [labelPeriod(), CAP, a.standing.seconds, a.standing.percent, a.walking.seconds, a.walking.percent, a.sitting.seconds, a.sitting.percent, a.unknown.seconds, total.toFixed(1)]
+      ['Tarih','İsim','Ayakta(s)','Ayakta(%)','Yürüme(s)','Yürüme(%)','Oturma(s)','Oturma(%)','Bilinmiyor(s)','Toplam(s)'],
+      [activeDate, CAP, a.standing.seconds, a.standing.percent, a.walking.seconds, a.walking.percent, a.sitting.seconds, a.sitting.percent, a.unknown.seconds, total.toFixed(1)]
     ];
     const csv = rows.map(r => r.join(',')).join('\n');
     const link = document.createElement('a');
     link.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-    link.download = `${USER}_takip_raporu_${activePeriod}.csv`;
+    link.download = `${USER}_takip_raporu_${activeDate}.csv`;
     link.click();
   }
 
+  // İlk yükleme
+  document.getElementById('datePicker').value = activeDate;
   loadData();
 </script>
 </body>
