@@ -272,6 +272,14 @@
 
   const COLORS = ['#7060D0','#5E87D4','#D06080','#40A878','#D09040','#9060C0','#4090B0'];
 
+  // ── Bilinen çalışan listesi (seçili GÜNDEN bağımsız) ──
+  // Çipler ve karşılaştırma bunu kullanır; böylece veri olmayan bir gün seçilse de
+  // kişi listesi kaybolmaz. FALLBACK'teki kayıtlı çalışanlarla tohumlanır,
+  // her veri yüklemesinde yeni isimler eklenir.
+  const KNOWN_WORKERS = new Set(Object.keys(FALLBACK));
+  function noteWorkers(obj){ Object.keys(obj || {}).forEach(n => KNOWN_WORKERS.add(n)); }
+  function rosterAll(){ return [...KNOWN_WORKERS].sort(); }
+
   document.getElementById('dateStr').textContent = new Date().toLocaleDateString('tr-TR', {weekday:'long',year:'numeric',month:'long',day:'numeric'});
 
   // ── AWS YAPILANDIRMASI ──────────────────────────────────────────────
@@ -785,7 +793,7 @@
 
   // Renk paletini isimlere sabitle (her kişi hep aynı renk)
   function colorFor(name){
-    const roster = Object.keys(currentData || {}).sort();
+    const roster = rosterAll();
     const i = roster.indexOf(name);
     return COLORS[(i<0?0:i) % COLORS.length];
   }
@@ -856,6 +864,7 @@
 
   // Üst bar tarih seçici + karşılaştırma kontrollerini mevcut çalışan listesine göre hazırla
   function syncCompareControls(){
+    noteWorkers(currentData);   // o günün çalışanlarını bilinenlere ekle
     // tarih seçici değeri
     const dp = document.getElementById('datePicker');
     if (dp && !dp.value) dp.value = activeDate;
@@ -866,8 +875,8 @@
     if (cf && !cf.value) cf.value = isoShift(-6);
     if (ct && !ct.value) ct.value = isoToday();
 
-    // çalışan çipleri
-    const roster = Object.keys(currentData || {}).sort();
+    // çalışan çipleri (seçili günden bağımsız — her zaman tüm bilinen çalışanlar)
+    const roster = rosterAll();
     if (cmp.selected.size === 0) roster.slice(0,2).forEach(n => cmp.selected.add(n));
 
     const wrap = document.getElementById('personChips');
@@ -899,7 +908,7 @@
     cmp.to   = document.getElementById('cmpTo').value   || isoToday();
     if (cmp.from > cmp.to) { const t=cmp.from; cmp.from=cmp.to; cmp.to=t; }
 
-    const roster = Object.keys(currentData || {}).sort();
+    const roster = rosterAll();
     const series = await Promise.all(roster.map(n => getSeries(n, cmp.from, cmp.to)));
     cmp.series = {};
     roster.forEach((n,i) => cmp.series[n] = series[i]);
