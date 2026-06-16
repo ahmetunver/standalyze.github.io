@@ -199,22 +199,6 @@
         <div id="alertList"></div>
       </div>
 
-      <!-- Görev Tanımları (rol) -->
-      <div class="panel chart-full" style="margin-bottom:18px">
-        <div class="panel-header">
-          <div>
-            <div class="panel-title">Görev Tanımları</div>
-            <div class="panel-sub">Her çalışanın rolü — aktiflik oranı buna göre hesaplanır · Saha: ayakta+yürüme · Masabaşı: oturma+ayakta+yürüme</div>
-          </div>
-          <button class="btn-apply" id="rolesSaveBtn" onclick="saveRoles()">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-            Kaydet
-          </button>
-        </div>
-        <div id="rolesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px"></div>
-        <div id="rolesStatus" style="font-size:12px;margin-top:10px;color:#8B85A8"></div>
-      </div>
-
       <!-- charts -->
       <div class="charts-grid">
         <!-- Aktivite kompozisyonu (kişi başına %100 yığılmış) -->
@@ -914,7 +898,6 @@
   // Üst bar tarih seçici + karşılaştırma kontrollerini mevcut çalışan listesine göre hazırla
   function syncCompareControls(){
     noteWorkers(currentData);   // o günün çalışanlarını bilinenlere ekle
-    renderRolesPanel();         // görev tanımı panelini tazele (yeni çalışanlar için)
     // tarih seçici değeri
     const dp = document.getElementById('datePicker');
     if (dp && !dp.value) dp.value = activeDate;
@@ -1188,7 +1171,7 @@
 
   // ── İlk yükleme ──
   document.getElementById('datePicker').value = activeDate;
-  (async () => { await loadRoles(); renderRolesPanel(); loadData(); })();
+  (async () => { await loadRoles(); loadData(); })();
 </script>
   <!-- ÇIKIŞ: kullanıcı kartına tıklayınca oturum kapanır -->
   <script>

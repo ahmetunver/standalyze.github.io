@@ -367,6 +367,7 @@
           <button class="cam-btn" data-cam="CAM7" onclick="setCamera('CAM7')" style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:400;background:transparent;color:#6B5FD4;">CAM7</button>
           <button class="cam-btn" data-cam="CAM8" onclick="setCamera('CAM8')" style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:400;background:transparent;color:#6B5FD4;">CAM8</button>
         </div>
+        <input type="date" id="datePicker" onchange="onDateChange()" style="border:1px solid #E6E2F4;border-radius:8px;padding:4px 8px;font-size:12px;color:#1A1635;font-family:inherit;cursor:pointer" />
         <span class="topbar-date" id="dateStr"></span>
         <button class="notif-btn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
@@ -491,6 +492,66 @@
 
   let activeCamera = 'both';
 
+  // ── Tarih + auth yardımcıları ──
+  function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; }
+  function isoToday(){ return ymd(new Date()); }
+  let activeDate = isoToday();
+  function onDateChange(){ activeDate = document.getElementById('datePicker').value || isoToday(); loadData(); }
+  function camLabel(){ return activeCamera==='both' ? 'CAM7+CAM8' : activeCamera; }
+  async function authHeader(){ try{ const t=await Auth.idToken(); return t?{Authorization:'Bearer '+t}:{}; }catch(e){ return {}; } }
+
+  // ── Aktivite normalize: her aktivite {seconds,percent} olsun, yüzdeler kişinin toplamından ──
+  function zeroActs(){ return { sitting:{seconds:0,percent:0}, standing:{seconds:0,percent:0}, walking:{seconds:0,percent:0}, unknown:{seconds:0,percent:0} }; }
+  function normActs(a){
+    if(!a) return zeroActs();
+    const g = k => Number((a[k] && (a[k].seconds!=null ? a[k].seconds : a[k])) || 0);
+    const s = { sitting:g('sitting'), standing:g('standing'), walking:g('walking'), unknown:g('unknown') };
+    const tot = s.sitting+s.standing+s.walking+s.unknown;
+    const pct = v => tot>0 ? +(v/tot*100).toFixed(1) : 0;
+    return {
+      sitting:{seconds:s.sitting,percent:pct(s.sitting)},
+      standing:{seconds:s.standing,percent:pct(s.standing)},
+      walking:{seconds:s.walking,percent:pct(s.walking)},
+      unknown:{seconds:s.unknown,percent:pct(s.unknown)},
+    };
+  }
+
+  // ── Görev tanımı (rol) — AWS/DynamoDB'de tutulur (GET/POST /standalyze-config) ──
+  let workerRoles = {};
+  function roleOf(name){ return workerRoles[(name||'').toLowerCase()] || 'saha'; }
+  function setRolesFrom(obj){ workerRoles={}; Object.keys(obj||{}).forEach(k => workerRoles[k.toLowerCase()] = String(obj[k]).toLowerCase()); }
+  async function loadRoles(){
+    if(!API_URL) return;
+    try{
+      const r = await fetch(`${API_URL}/standalyze-config`, { headers:{ Accept:'application/json', ...(await authHeader()) } });
+      if(!r.ok) return;
+      const j = await r.json();
+      if(j && j.roles && typeof j.roles==='object') setRolesFrom(j.roles);
+    }catch(e){}
+  }
+  async function onRoleChange(name, val){
+    workerRoles[name.toLowerCase()] = val;
+    roleToast('Kaydediliyor…', '#8B85A8');
+    try{
+      const r = await fetch(`${API_URL}/standalyze-config`, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', ...(await authHeader()) },
+        body: JSON.stringify({ roles: workerRoles })
+      });
+      const j = await r.json().catch(()=>({}));
+      if(r.ok && j.roles){ setRolesFrom(j.roles); roleToast('Görev tanımı kaydedildi ✓', '#16A34A'); }
+      else roleToast(j.error || 'Kaydedilemedi', '#C03050');
+    }catch(e){ roleToast('Hata: '+e.message, '#C03050'); }
+  }
+  function roleToast(msg, col){
+    let t = document.getElementById('roleToast');
+    if(!t){ t=document.createElement('div'); t.id='roleToast';
+      t.style.cssText='position:fixed;right:18px;bottom:18px;z-index:9999;padding:10px 16px;border-radius:10px;background:#fff;border:1px solid #ECE8FB;box-shadow:0 6px 24px rgba(60,40,120,.15);font-size:13px;font-weight:600;transition:opacity .4s';
+      document.body.appendChild(t); }
+    t.textContent=msg; t.style.color=col||'#1A1635'; t.style.opacity='1';
+    clearTimeout(t._h); t._h=setTimeout(()=>{ t.style.opacity='0'; }, 2400);
+  }
+
   function setCamera(cam) {
     activeCamera = cam;
     document.querySelectorAll('.cam-btn').forEach(b => {
@@ -501,50 +562,52 @@
   }
 
   async function loadData() {
-    let raw;
+    const ds = document.getElementById('dataSource');
+    let data = {};   // { name: rawActs }  (gerçek AWS verisi)
     if (API_URL) {
       try {
-        const res = await fetch(`${API_URL}/reports?camera=${activeCamera}`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        raw = await res.json();
-        document.getElementById('dataSource').textContent = `● AWS Canlı (${activeCamera === 'both' ? 'CAM7+CAM8' : activeCamera})`;
-        document.getElementById('dataSource').style.color = '#16A34A';
+        const url = `${API_URL}/standalyze-get-reports?camera=${activeCamera}&date=${activeDate}`;
+        const res = await fetch(url, { headers: { Accept:'application/json', ...(await authHeader()) } });
+        if (res.ok) {
+          const raw = await res.json();
+          const m = (raw && (raw.merged || (activeCamera!=='both' ? raw[activeCamera] : null))) || raw || {};
+          Object.keys(m || {}).forEach(k => {
+            const v = m[k];
+            if (v && typeof v === 'object' && (v.standing || v.sitting || v.walking || v.unknown)) {
+              data[k.toLowerCase()] = v;
+            }
+          });
+          const has = Object.keys(data).length > 0;
+          ds.textContent = has ? `● AWS Günlük Veri · ${activeDate} (${camLabel()})` : `● ${activeDate} — bu güne ait kayıt yok`;
+          ds.style.color  = has ? '#16A34A' : '#C03050';
+        } else if (res.status === 401 || res.status === 403) {
+          ds.textContent = '● Yetki hatası (yeniden giriş gerekebilir)'; ds.style.color = '#C03050';
+        } else {
+          ds.textContent = `● Veri alınamadı (HTTP ${res.status})`; ds.style.color = '#C03050';
+        }
       } catch(e) {
-        console.warn('AWS API erişilemedi:', e.message);
-        raw = { merged: FALLBACK };
-        document.getElementById('dataSource').textContent = '● Yerel Veri';
-        document.getElementById('dataSource').style.color = '#D97706';
-      }
-    } else {
-      try {
-        const res = await fetch('http://localhost:8080/cam7_report.json');
-        if (!res.ok) throw new Error();
-        const d = await res.json();
-        raw = { merged: d, CAM7: d, CAM8: {} };
-        document.getElementById('dataSource').textContent = '● Yerel Sunucu';
-        document.getElementById('dataSource').style.color = '#2563EB';
-      } catch {
-        raw = { merged: FALLBACK };
-        document.getElementById('dataSource').textContent = '● Yerel Veri';
-        document.getElementById('dataSource').style.color = '#D97706';
+        ds.textContent = '● Bağlantı hatası'; ds.style.color = '#C03050';
       }
     }
-    const data = (raw && raw.merged) ? raw.merged : raw;
-    const areaLabel   = activeCamera === 'both' ? 'CAM7+CAM8 · Çalışma Alanı' : `${activeCamera} · Çalışma Alanı`;
-    const baseEntries  = Object.entries(data).map(([name, acts]) => ({ name, acts, area: areaLabel, extra: false }));
-    const extraEntries = extras.map(e => ({ name: e.name, acts: e.acts, area: e.area || 'Manuel kayıt', extra: true }));
-    const combined = [...baseEntries, ...extraEntries];
 
-    allEmployees = combined.map((emp, i) => {
-      const a = emp.acts;
-      const total = a.sitting.seconds + a.standing.seconds + a.walking.seconds + a.unknown.seconds;
-      return { name: emp.name, acts: a, area: emp.area, total, color: COLORS[i % COLORS.length], solid: SOLID[i % SOLID.length], i, extra: emp.extra };
+    // Roster: bilinen isimler ∪ manuel eklenenler ∪ API'de veri görünenler
+    const known      = Object.keys(FALLBACK);
+    const extraNames = extras.map(e => e.name.toLowerCase());
+    const extraActs  = {}; extras.forEach(e => extraActs[e.name.toLowerCase()] = e.acts);
+    const roster     = [...new Set([...known, ...extraNames, ...Object.keys(data)])];
+
+    allEmployees = roster.map((name, i) => {
+      const acts    = normActs(data[name] || extraActs[name] || null);
+      const total   = acts.sitting.seconds + acts.standing.seconds + acts.walking.seconds + acts.unknown.seconds;
+      const isExtra = extraNames.includes(name) && !data[name];
+      return { name, acts, area: `${camLabel()} · Çalışma Alanı`, total,
+               color: COLORS[i % COLORS.length], solid: SOLID[i % SOLID.length], i, extra: isExtra };
     });
 
     renderCards(allEmployees);
-    const extraCount = extraEntries.length;
+    const extraCount = extras.length;
     document.getElementById('subTitle').textContent =
-      `${allEmployees.length} çalışan` + (extraCount ? ` · ${extraCount} tanesi manuel eklendi` : ' kamera verilerinden analiz edildi');
+      `${allEmployees.length} çalışan` + (extraCount ? ` · ${extraCount} tanesi manuel eklendi` : ' · kamera verilerinden');
   }
 
   function secFmt(s) {
@@ -591,6 +654,13 @@
             <span class="act-pct" style="color:#D06080">${Math.round(emp.acts.sitting.percent)}%</span>
           </div>
         </div>
+        <div class="emp-role-row" style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid #F0EEF8">
+          <span style="font-size:12px;color:#8B85A8;font-weight:600">Görev tanımı</span>
+          <select class="person-select" style="font-size:12px;min-width:120px;padding:5px 8px;border:1px solid #E6E2F4;border-radius:8px;background:#fff;color:#1A1635;cursor:pointer" onchange="onRoleChange('${emp.name}', this.value)">
+            <option value="saha"${roleOf(emp.name)==='saha'?' selected':''}>Saha</option>
+            <option value="masabasi"${roleOf(emp.name)==='masabasi'?' selected':''}>Masabaşı</option>
+          </select>
+        </div>
         <div class="emp-card-footer">
           <div class="total-time">Toplam: <strong>${totalMin} dk</strong></div>
           <div style="display:flex;gap:6px">
@@ -624,7 +694,7 @@
     document.getElementById('mAvatar').style.background = emp.color;
     document.getElementById('mAvatar').textContent = init;
     document.getElementById('mName').textContent = cap;
-    document.getElementById('mSub').textContent = (emp.area || 'Cam7 · Çalışma Alanı') + ' · Bugün';
+    document.getElementById('mSub').textContent = (emp.area || 'Cam7 · Çalışma Alanı') + ' · ' + activeDate;
 
     const totalMin = (emp.total / 60).toFixed(1);
     document.getElementById('mStats').innerHTML = `
@@ -730,7 +800,11 @@
 
   document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeModalDirect(); closeAddDirect(); } });
 
-  loadData();
+  (async () => {
+    document.getElementById('datePicker').value = activeDate;
+    await loadRoles();
+    loadData();
+  })();
   if (new URLSearchParams(location.search).get('add') === '1') openAddModal();
 </script>
   <!-- ÇIKIŞ: kullanıcı kartına tıklayınca oturum kapanır -->
