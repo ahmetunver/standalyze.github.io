@@ -217,15 +217,15 @@
 
       <!-- charts -->
       <div class="charts-grid">
-        <!-- Aktivite dağılımı donut -->
+        <!-- Aktivite kompozisyonu (kişi başına %100 yığılmış) -->
         <div class="panel">
           <div class="panel-header">
             <div>
-              <div class="panel-title">Genel Aktivite Dağılımı</div>
-              <div class="panel-sub">Tüm çalışanların toplam süresi</div>
+              <div class="panel-title">Aktivite Kompozisyonu</div>
+              <div class="panel-sub">Kişi başına duruş dağılımı (%)</div>
             </div>
           </div>
-          <canvas id="donutChart"></canvas>
+          <div id="composition" style="padding-top:4px"></div>
         </div>
 
         <!-- Kişi başı toplam süre -->
@@ -631,30 +631,10 @@
       </div>
     `).join('');
 
-    if (donutChart) donutChart.destroy();
     if (barChart) barChart.destroy();
 
-    // donut
-    donutChart = new Chart(document.getElementById('donutChart'), {
-      type: 'doughnut',
-      data: {
-        labels: ['Ayakta','Oturma','Bilinmiyor'],
-        datasets: [{
-          data: [totStand, totSit, totUnk].map(v => +v.toFixed(1)),
-          backgroundColor: ['#7060D0','#D06080','#E0DAF8'],
-          borderWidth: 0,
-          hoverOffset: 6,
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: true,
-        cutout: '68%',
-        plugins: {
-          legend: { position:'bottom', labels:{ font:{family:'Plus Jakarta Sans',size:11}, padding:12, usePointStyle:true } },
-          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${fmtHM(ctx.raw)} (${totAll > 0 ? Math.round(ctx.raw / totAll * 100) : 0}%)` } }
-        }
-      }
-    });
+    // Aktivite kompozisyonu — kişi başına %100 yığılmış bar (donut yerine)
+    renderComposition(entries);
 
     // bar — rol bazlı AKTİFLİK ORANI (%) per person, yüksekten düşüğe sıralı
     const rateRows = entries.map(([n,a]) => {
@@ -689,6 +669,38 @@
     });
   }
 
+  // Aktivite kompozisyonu — her çalışan için %100 yığılmış bar (duruş kırılımı)
+  function renderComposition(entries){
+    const host = document.getElementById('composition'); if(!host) return;
+    const SEG = [
+      {key:'standing', label:'Ayakta',     color:'#7060D0'},
+      {key:'walking',  label:'Yürüme',     color:'#40A878'},
+      {key:'sitting',  label:'Oturma',     color:'#D06080'},
+      {key:'unknown',  label:'Bilinmiyor', color:'#C9C2E8'},
+    ];
+    const rowsHtml = (entries||[]).map(([n,a]) => {
+      const cap = n.charAt(0).toUpperCase()+n.slice(1);
+      const sec = { standing:a.standing.seconds, walking:a.walking.seconds, sitting:a.sitting.seconds, unknown:a.unknown.seconds };
+      const tot = sec.standing+sec.walking+sec.sitting+sec.unknown;
+      const segs = SEG.map(s => {
+        const pct = tot>0 ? (sec[s.key]/tot*100) : 0;
+        const dark = s.key!=='unknown';
+        const lbl = pct>=11 ? Math.round(pct)+'%' : '';
+        return `<div title="${s.label} · %${tot>0?Math.round(sec[s.key]/tot*100):0}" style="width:${pct}%;background:${s.color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:${dark?'#fff':'#5A5470'};overflow:hidden">${lbl}</div>`;
+      }).join('');
+      const track = tot>0
+        ? `<div style="flex:1;display:flex;height:24px;border-radius:7px;overflow:hidden;border:1px solid #ECE9F6">${segs}</div>`
+        : `<div style="flex:1;height:24px;border-radius:7px;border:1px dashed #E0DCEE;background:#FAF9FE;display:flex;align-items:center;justify-content:center;font-size:11px;color:#C7C0E0">veri yok</div>`;
+      return `<div style="display:flex;align-items:center;gap:10px">
+        <div style="width:64px;font-size:13px;color:#1A1635;flex:none">${cap}</div>${track}</div>`;
+    }).join('');
+    const legend = SEG.map(s => `<span style="display:flex;align-items:center;gap:5px"><span style="width:11px;height:11px;border-radius:3px;background:${s.color}"></span>${s.label}</span>`).join('');
+    host.innerHTML = (entries && entries.length)
+      ? `<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;font-size:12px;color:#8B85A8">${legend}</div>
+         <div style="display:flex;flex-direction:column;gap:9px">${rowsHtml}</div>`
+      : `<div style="padding:24px 0;text-align:center;color:#A09BB8;font-size:13px">Bu güne ait kayıt yok</div>`;
+  }
+
   // ── PDF İNDİR — başlık + özet + grafikler + tablo (kullanıcı dostu) ──
   // ── PDF İNDİR — tarayıcı render'ı ile (Türkçe karakterler düzgün) + şık tasarım ──
   async function exportPDF() {
@@ -711,7 +723,8 @@
 
     // Mevcut grafikleri görüntüye çevir
     const imgOf = (id) => { const c = document.getElementById(id); try { return (c && c.width) ? c.toDataURL('image/png',1.0) : ''; } catch(e){ return ''; } };
-    const donutImg = imgOf('donutChart');
+    let donutImg = '';
+    try { const el = document.getElementById('composition'); if (el) donutImg = (await html2canvas(el, { backgroundColor:'#ffffff', scale:2 })).toDataURL('image/png'); } catch(e){ donutImg = ''; }
     const barImg   = imgOf('barChart');
     const cmpImg   = imgOf('compareChart');
 
@@ -764,7 +777,7 @@
           </div>
 
           <div style="display:flex;gap:12px;margin-top:14px">
-            ${chartCard('Genel Aktivite Dağılımı', donutImg)}
+            ${chartCard('Aktivite Kompozisyonu', donutImg)}
             ${chartCard('Aktiflik / Hareket Oranı', barImg)}
           </div>
 
