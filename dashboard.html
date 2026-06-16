@@ -327,7 +327,8 @@
   function normalizeActivity(person, key, totalSeconds) {
     const item = person && person[key] ? person[key] : {};
     const seconds = Number(item.seconds ?? person?.[`${key}_seconds`] ?? 0);
-    const percent = Number(item.percent ?? (totalSeconds > 0 ? (seconds / totalSeconds) * 100 : 0));
+    // Yüzde her zaman saniyeden hesaplanır (API "merged" veride percent=0 gelebiliyor)
+    const percent = totalSeconds > 0 ? (seconds / totalSeconds) * 100 : 0;
     return { seconds, percent };
   }
 
