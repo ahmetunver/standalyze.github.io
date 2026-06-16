@@ -147,9 +147,9 @@
                 <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
               </svg>
             </div>
-            <span class="stat-change up">+2</span>
+            <span class="stat-change up" id="totalBadge"></span>
           </div>
-          <div class="stat-num">7</div>
+          <div class="stat-num" id="totalCount">7</div>
           <div class="stat-label">Toplam Çalışan</div>
         </div>
 
@@ -160,9 +160,9 @@
                 <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
               </svg>
             </div>
-            <span class="stat-change up">↑ 08:42</span>
+            <span class="stat-change up" id="loginBadge"></span>
           </div>
-          <div class="stat-num">5</div>
+          <div class="stat-num" id="loginCount">5</div>
           <div class="stat-label">Bugün Giriş Yapan</div>
         </div>
 
@@ -516,6 +516,17 @@
     document.getElementById('activeCount').textContent = names.length;
     document.getElementById('welcomeDesc').textContent =
       `Son güncel veride ${names.length} çalışan analiz edildi, 2 kamera çevrimiçi${lastUpdatedText ? ' · Güncelleme: ' + lastUpdatedText : ''}.`;
+
+    // ── Gerçek KPI'lar ──
+    const extras = JSON.parse(localStorage.getItem('extraEmployees') || '[]').map(e => (e.name || '').toLowerCase());
+    const roster = [...new Set([...Object.keys(FALLBACK_DATA), ...extras, ...names])];
+    const total  = roster.length;            // toplam kayıtlı çalışan (roster)
+    const seen   = names.length;             // o gün kamerada görülen (= "giriş yapan")
+    const el = id => document.getElementById(id);
+    if (el('totalCount')) el('totalCount').textContent = total;
+    if (el('loginCount')) el('loginCount').textContent = seen;
+    if (el('totalBadge')) el('totalBadge').textContent = '';                       // sahte "+2" kaldırıldı
+    if (el('loginBadge')) el('loginBadge').textContent = total > 0 ? `${seen}/${total}` : '';  // gerçek: görülen/toplam
   }
 
   function renderTable(data) {
