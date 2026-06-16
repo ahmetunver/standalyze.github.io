@@ -99,18 +99,20 @@
           font-weight:700;color:#fff;font-family:inherit;transition:transform .15s,opacity .2s,box-shadow .2s;}
         .ctl-btn:hover:not(:disabled){transform:translateY(-2px);}
         .ctl-btn:disabled{opacity:.45;cursor:not-allowed;transform:none;}
-        .ctl-btn.both{background:linear-gradient(135deg,#7060D0,#38B882);box-shadow:0 4px 16px rgba(112,96,208,.30);}
+        .ctl-btn.both{background:linear-gradient(135deg,#7060D0,#5E87D4);box-shadow:0 2px 12px rgba(112,96,208,.3);}
         .ctl-info{margin-top:12px;font-size:13px;font-weight:600;min-height:18px;}
         .ctl-info.ok{color:#207858;} .ctl-info.warn{color:#B07000;} .ctl-info.err{color:#C03050;}
         .ctl-info a{color:#7060D0;font-weight:700;text-decoration:underline;cursor:pointer;}
-        /* tema override — app.css'in buton reset'ini geçmek için (yüksek özgüllük + !important) */
-        .ctl-panel .ctl-btn{display:inline-flex !important;align-items:center;gap:8px;cursor:pointer;
-          border:none !important;border-radius:10px !important;padding:11px 18px !important;
-          font-size:13px !important;font-weight:700 !important;color:#fff !important;font-family:inherit;width:auto !important;}
-        .ctl-panel .ctl-btn.both{background:linear-gradient(135deg,#7060D0,#38B882) !important;
-          box-shadow:0 4px 16px rgba(112,96,208,.30) !important;}
-        .ctl-panel .ctl-btn:hover:not(:disabled){transform:translateY(-2px);}
+        /* app'in standart .btn-primary görünümü (diğer sayfalarla aynı) — app.css buton reset'ini geçmek için */
+        .ctl-panel .ctl-btn{display:inline-flex !important;align-items:center;gap:6px;cursor:pointer;
+          border:none !important;border-radius:10px !important;padding:8px 14px !important;
+          font-size:12px !important;font-weight:600 !important;color:#fff !important;font-family:inherit;width:auto !important;
+          white-space:nowrap;transition:all .15s;}
+        .ctl-panel .ctl-btn.both{background:linear-gradient(135deg,#7060D0,#5E87D4) !important;
+          box-shadow:0 2px 12px rgba(112,96,208,.3) !important;}
+        .ctl-panel .ctl-btn:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 4px 18px rgba(112,96,208,.4) !important;}
         .ctl-panel .ctl-btn:disabled{opacity:.5 !important;cursor:not-allowed !important;}
+        .ctl-panel .ctl-btn svg{width:14px !important;height:14px !important;}
       </style>
       <div class="ctl-panel">
         <div class="ctl-head">
