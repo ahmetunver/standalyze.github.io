@@ -103,6 +103,14 @@
         .ctl-info{margin-top:12px;font-size:13px;font-weight:600;min-height:18px;}
         .ctl-info.ok{color:#207858;} .ctl-info.warn{color:#B07000;} .ctl-info.err{color:#C03050;}
         .ctl-info a{color:#7060D0;font-weight:700;text-decoration:underline;cursor:pointer;}
+        /* tema override — app.css'in buton reset'ini geçmek için (yüksek özgüllük + !important) */
+        .ctl-panel .ctl-btn{display:inline-flex !important;align-items:center;gap:8px;cursor:pointer;
+          border:none !important;border-radius:10px !important;padding:11px 18px !important;
+          font-size:13px !important;font-weight:700 !important;color:#fff !important;font-family:inherit;width:auto !important;}
+        .ctl-panel .ctl-btn.both{background:linear-gradient(135deg,#7060D0,#38B882) !important;
+          box-shadow:0 4px 16px rgba(112,96,208,.30) !important;}
+        .ctl-panel .ctl-btn:hover:not(:disabled){transform:translateY(-2px);}
+        .ctl-panel .ctl-btn:disabled{opacity:.5 !important;cursor:not-allowed !important;}
       </style>
       <div class="ctl-panel">
         <div class="ctl-head">
@@ -110,7 +118,7 @@
           <div class="ctl-server" id="ctlServerDot">● kontrol ediliyor…</div>
         </div>
         <div class="ctl-btns">
-          <button class="ctl-btn both" id="btnStartRecordings" onclick="ctlStart('both', this)">Kamera Kayıtlarını Başlat</button>
+          <button class="ctl-btn both" id="btnStartRecordings" onclick="ctlStart('both', this)"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>Kamera Kayıtlarını Başlat</button>
         </div>
         <div class="ctl-info" id="ctlInfo">Kayıt işlemini başlatmak için butona tıklayın.</div>
       </div>
