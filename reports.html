@@ -199,6 +199,22 @@
         <div id="alertList"></div>
       </div>
 
+      <!-- Görev Tanımları (rol) -->
+      <div class="panel chart-full" style="margin-bottom:18px">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Görev Tanımları</div>
+            <div class="panel-sub">Her çalışanın rolü — aktiflik oranı buna göre hesaplanır · Saha: ayakta+yürüme · Masabaşı: oturma+ayakta+yürüme</div>
+          </div>
+          <button class="btn-apply" id="rolesSaveBtn" onclick="saveRoles()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+            Kaydet
+          </button>
+        </div>
+        <div id="rolesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px"></div>
+        <div id="rolesStatus" style="font-size:12px;margin-top:10px;color:#8B85A8"></div>
+      </div>
+
       <!-- charts -->
       <div class="charts-grid">
         <!-- Aktivite dağılımı donut -->
@@ -216,11 +232,11 @@
         <div class="panel">
           <div class="panel-header">
             <div>
-              <div class="panel-title">Kişi Başı Toplam Süre</div>
-              <div class="panel-sub">Dakika cinsinden</div>
+              <div class="panel-title">Aktiflik / Hareket Oranı</div>
+              <div class="panel-sub">Rol bazlı aktif hareket yüzdesi · yüksek = daha hareketli</div>
             </div>
           </div>
-          <canvas id="barChart"></canvas>
+          <div style="position:relative;height:300px"><canvas id="barChart"></canvas></div>
         </div>
       </div>
 
@@ -261,6 +277,18 @@
         <div style="position:relative;height:320px">
           <canvas id="compareChart"></canvas>
         </div>
+      </div>
+
+      <!-- Aktiflik Isı Haritası -->
+      <div class="panel chart-full" style="margin-top:18px">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Aktiflik Isı Haritası</div>
+            <div class="panel-sub">Çalışan × gün — koyu hücre = o gün daha aktif (rol bazlı hareket oranı). Yukarıdaki tarih aralığını kullanır.</div>
+          </div>
+        </div>
+        <div id="heatmap" style="overflow-x:auto"></div>
+        <div id="heatmapLegend" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:#8B85A8"></div>
       </div>
 
     </div>
@@ -628,26 +656,34 @@
       }
     });
 
-    // bar — toplam süre per person
-    const totals = entries.map(([,a]) => +((a.standing.seconds+a.walking.seconds+a.sitting.seconds+a.unknown.seconds)/60).toFixed(1));
+    // bar — rol bazlı AKTİFLİK ORANI (%) per person, yüksekten düşüğe sıralı
+    const rateRows = entries.map(([n,a]) => {
+      const acc = { standing:a.standing.seconds, walking:a.walking.seconds, sitting:a.sitting.seconds, unknown:a.unknown.seconds };
+      return { name:n, cap:n.charAt(0).toUpperCase()+n.slice(1), rate: activeRateFrom(acc, roleOf(n)) };
+    }).filter(r => r.rate !== null).sort((x,y) => y.rate - x.rate);
+
     barChart = new Chart(document.getElementById('barChart'), {
       type: 'bar',
       data: {
-        labels: names,
+        labels: rateRows.map(r => r.cap),
         datasets: [{
-          label: 'Toplam (dk)',
-          data: totals,
-          backgroundColor: COLORS,
+          label: 'Aktiflik oranı (%)',
+          data: rateRows.map(r => r.rate),
+          backgroundColor: rateRows.map(r => colorFor(r.name)),
           borderRadius: 8,
           borderSkipped: false,
         }]
       },
       options: {
-        responsive: true, maintainAspectRatio: true,
-        plugins: { legend:{ display:false }, tooltip:{ callbacks:{ label: ctx => ` ${fmtHM(ctx.raw*60)}` } } },
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend:{ display:false },
+          tooltip:{ callbacks:{ label: ctx => ` %${ctx.raw} aktif · ${ROLE_LABEL[roleOf(rateRows[ctx.dataIndex].name)]}` } }
+        },
         scales: {
-          y: { grid:{ color:'#F0EEF8' }, ticks:{ font:{family:'Plus Jakarta Sans',size:10}, color:'#8B85A8' } },
-          x: { grid:{ display:false }, ticks:{ font:{family:'Plus Jakarta Sans',size:11}, color:'#1A1635' } }
+          x: { beginAtZero:true, max:100, grid:{ color:'#F0EEF8' }, ticks:{ callback:v=>v+'%', font:{family:'Plus Jakarta Sans',size:10}, color:'#8B85A8' } },
+          y: { grid:{ display:false }, ticks:{ font:{family:'Plus Jakarta Sans',size:11}, color:'#1A1635' } }
         }
       }
     });
@@ -729,7 +765,7 @@
 
           <div style="display:flex;gap:12px;margin-top:14px">
             ${chartCard('Genel Aktivite Dağılımı', donutImg)}
-            ${chartCard('Kişi Başı Toplam Süre', barImg)}
+            ${chartCard('Aktiflik / Hareket Oranı', barImg)}
           </div>
 
           ${cmpImg ? `<div style="margin-top:14px">${chartCard(`Kişi Bazlı Karşılaştırma (${cmp.from} → ${cmp.to})`, cmpImg)}</div>` : ''}
@@ -865,6 +901,7 @@
   // Üst bar tarih seçici + karşılaştırma kontrollerini mevcut çalışan listesine göre hazırla
   function syncCompareControls(){
     noteWorkers(currentData);   // o günün çalışanlarını bilinenlere ekle
+    renderRolesPanel();         // görev tanımı panelini tazele (yeni çalışanlar için)
     // tarih seçici değeri
     const dp = document.getElementById('datePicker');
     if (dp && !dp.value) dp.value = activeDate;
@@ -915,6 +952,7 @@
 
     renderCompareChart();
     detectDeclines();             // 3 gün düşüş taraması
+    renderHeatmap();              // ısı haritasını güncelle
   }
 
   function renderCompareChart(){
@@ -1014,9 +1052,130 @@
     }).join('');
   }
 
+  /* ════════════════════════════════════════════════════════════════════
+     GÖREV TANIMLARI (ROL) + AKTİFLİK ORANI + ISI HARİTASI
+     ════════════════════════════════════════════════════════════════════ */
+
+  // Rol -> "aktif" sayılan aktiviteler (frontend tanımı; AWS yalnızca etiketi tutar)
+  const ROLE_ACTIVE = {
+    saha:     ['standing','walking'],            // saha: ayakta + yürüme
+    masabasi: ['sitting','standing','walking'],  // masabaşı: oturma + ayakta + yürüme
+  };
+  const ROLE_LABEL = { saha:'Saha', masabasi:'Masabaşı' };
+  let workerRoles = {};   // { kadir:'saha', ... } — boşsa varsayılan saha
+  function roleOf(name){ return workerRoles[(name||'').toLowerCase()] || 'saha'; }
+
+  // saniye kırılımından role göre aktif hareket oranı (%) — veri yoksa null
+  function activeRateFrom(acc, role){
+    const tot = (acc.standing||0)+(acc.walking||0)+(acc.sitting||0)+(acc.unknown||0);
+    if (tot <= 0) return null;
+    const active = (ROLE_ACTIVE[role] || ROLE_ACTIVE.saha).reduce((s,k)=>s+(acc[k]||0), 0);
+    return Math.round(active / tot * 100);
+  }
+
+  // ── Config API (AWS/DynamoDB): rolleri oku / yaz ──
+  async function loadRoles(){
+    if (!API_URL || API_URL.includes('XXXX')) return;
+    try {
+      const r = await fetch(`${API_URL}/standalyze-config`, { headers:{ 'Accept':'application/json', ...(await authHeader()) } });
+      if (!r.ok) return;
+      const j = await r.json();
+      if (j && j.roles && typeof j.roles === 'object') {
+        workerRoles = {};
+        Object.keys(j.roles).forEach(k => workerRoles[k.toLowerCase()] = String(j.roles[k]).toLowerCase());
+      }
+    } catch(e){}
+  }
+  async function saveRoles(){
+    const btn = document.getElementById('rolesSaveBtn');
+    if (btn) btn.disabled = true;
+    rolesStatus('Kaydediliyor…', '#8B85A8');
+    try {
+      const r = await fetch(`${API_URL}/standalyze-config`, {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', ...(await authHeader()) },
+        body: JSON.stringify({ roles: workerRoles })
+      });
+      const j = await r.json().catch(()=>({}));
+      if (r.ok && j.roles) rolesStatus('Kaydedildi ✓', '#16A34A');
+      else rolesStatus(j.error || 'Kaydedilemedi', '#C03050');
+    } catch(e){ rolesStatus('Hata: '+e.message, '#C03050'); }
+    if (btn) btn.disabled = false;
+    renderView();      // aktiflik barını tazele
+    renderHeatmap();   // ısı haritasını tazele
+  }
+  function rolesStatus(msg, col){ const s=document.getElementById('rolesStatus'); if(s){ s.textContent=msg; s.style.color=col||'#8B85A8'; } }
+  function onRoleChange(name, val){
+    workerRoles[name.toLowerCase()] = val;
+    rolesStatus("Değişiklik var — Kaydet'e basmayı unutma", '#D97706');
+    renderView(); renderHeatmap();   // canlı önizleme (kaydetmeden)
+  }
+  function renderRolesPanel(){
+    const grid = document.getElementById('rolesGrid'); if(!grid) return;
+    grid.innerHTML = rosterAll().map(n => {
+      const cap = n.charAt(0).toUpperCase()+n.slice(1);
+      const r = roleOf(n);
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border:1px solid #ECE9F6;border-radius:10px;background:#FAF9FE">
+                <span style="font-size:13px;color:#1A1635;font-weight:600">${cap}</span>
+                <select class="person-select" style="min-width:108px" onchange="onRoleChange('${n}', this.value)">
+                  <option value="saha"${r==='saha'?' selected':''}>Saha</option>
+                  <option value="masabasi"${r==='masabasi'?' selected':''}>Masabaşı</option>
+                </select>
+              </div>`;
+    }).join('');
+  }
+
+  // ── Isı haritası (çalışan × gün, hücre = rol bazlı aktiflik %) ──
+  function heatColor(v){
+    if (v==null) return null;
+    if (v<40) return '#EEEDFE';
+    if (v<55) return '#CECBF6';
+    if (v<70) return '#AFA9EC';
+    if (v<85) return '#7F77DD';
+    return '#534AB7';
+  }
+  function renderHeatmap(){
+    const host = document.getElementById('heatmap'); if(!host) return;
+    const from = cmp.from || isoShift(-6), to = cmp.to || isoToday();
+    const days = dateRange(from, to);
+    const roster = rosterAll();
+    if (!days.length){ host.innerHTML=''; return; }
+
+    const N = days.length;
+    let html = `<div style="display:grid;grid-template-columns:96px repeat(${N}, minmax(34px,1fr));gap:3px;min-width:${96+N*37}px">`;
+    html += `<div style="font-size:10px;color:#A09BB8;display:flex;align-items:flex-end">Gün →</div>`;
+    days.forEach(d => { html += `<div style="text-align:center;font-size:10px;color:#8B85A8;padding-bottom:3px">${trDay(d)}</div>`; });
+    roster.forEach(n => {
+      const cap = n.charAt(0).toUpperCase()+n.slice(1);
+      const role = roleOf(n);
+      const byDate = {};
+      (cmp.series[n] || []).forEach(rec => { byDate[rec.date] = rec; });
+      html += `<div style="font-size:12px;color:#1A1635;display:flex;align-items:center;padding-right:6px">${cap}</div>`;
+      days.forEach(d => {
+        const rec = byDate[d];
+        const v = rec ? activeRateFrom(rec, role) : null;
+        if (v==null) {
+          html += `<div title="${cap} · ${trDay(d)} · veri yok" style="height:30px;border-radius:6px;border:1px dashed #E0DCEE;background:#FAF9FE;display:flex;align-items:center;justify-content:center;font-size:10px;color:#C7C0E0">–</div>`;
+        } else {
+          const fg = v>=70 ? '#FFFFFF' : '#26215C';
+          html += `<div title="${cap} · ${trDay(d)} · %${v} aktif (${ROLE_LABEL[role]})" style="height:30px;border-radius:6px;background:${heatColor(v)};color:${fg};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">${v}</div>`;
+        }
+      });
+    });
+    html += `</div>`;
+    host.innerHTML = html;
+
+    const lg = document.getElementById('heatmapLegend');
+    if (lg) {
+      const items = [['#EEEDFE','<%40'],['#CECBF6','%40–54'],['#AFA9EC','%55–69'],['#7F77DD','%70–84'],['#534AB7','%85+']];
+      lg.innerHTML = items.map(([c,l]) => `<span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:${c}"></span>${l}</span>`).join('')
+        + `<span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:#FAF9FE;border:1px dashed #E0DCEE"></span>veri yok</span>`;
+    }
+  }
+
   // ── İlk yükleme ──
   document.getElementById('datePicker').value = activeDate;
-  loadData();
+  (async () => { await loadRoles(); renderRolesPanel(); loadData(); })();
 </script>
   <!-- ÇIKIŞ: kullanıcı kartına tıklayınca oturum kapanır -->
   <script>
