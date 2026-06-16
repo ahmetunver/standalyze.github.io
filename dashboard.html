@@ -300,6 +300,9 @@
   let activeCamera = 'both';
   let lastUpdatedText = '';
 
+  function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; }
+  async function authHeader(){ try{ const t=await Auth.idToken(); return t?{Authorization:'Bearer '+t}:{}; }catch(e){ return {}; } }
+
   function labelCamera(cam = activeCamera) {
     return cam === 'both' ? 'CAM7+CAM8' : cam;
   }
@@ -425,30 +428,56 @@
     return out;
   }
 
+  // Belirli bir gün için gerçek AWS verisini çek
+  async function fetchDay(date){
+    try{
+      const url = `${API_URL}/standalyze-get-reports?camera=${activeCamera}&date=${date}`;
+      const res = await fetch(url, { headers:{ Accept:'application/json', ...(await authHeader()) } });
+      if(!res.ok) return { status:res.status, data:null };
+      const raw = await res.json();
+      const m = (raw && (raw.merged || (activeCamera!=='both' ? raw[activeCamera] : null))) || raw || {};
+      const data = {};
+      Object.keys(m || {}).forEach(k => {
+        const v = m[k];
+        if (v && typeof v === 'object' && (v.standing || v.sitting || v.walking || v.unknown)) data[k.toLowerCase()] = v;
+      });
+      return { status:200, data };
+    }catch(e){ return { status:0, data:null }; }
+  }
+
   async function loadData() {
     const ds = document.getElementById('dataSource');
-    _reportLastMod = null;
-    const [c7, c8] = await Promise.all([
-      fetchReportJson('cam7_report.json'),
-      fetchReportJson('cam8_report.json'),
-    ]);
+    ds.textContent = '● Yükleniyor…'; ds.style.color = '#8B85A8';
 
-    let raw;
-    if (c7 || c8) {
-      raw = { latest: {
-        CAM7: c7 || {}, CAM8: c8 || {},
-        merged: mergeReports(c7, c8),
-        date: _reportLastMod,
-      } };
-      ds.textContent = `● AWS Son Güncel (${labelCamera()})`;
-      ds.style.color = '#16A34A';
-    } else {
-      raw = { latest: { merged: FALLBACK_DATA } };
-      ds.textContent = '● Yerel Veri · Son Güncel';
-      ds.style.color = '#D97706';
+    // Bugünden geriye doğru, veri olan ilk günü bul (en son güncel)
+    let found = null, foundDate = null, authErr = false;
+    const today = new Date();
+    for (let i = 0; i < 14; i++){
+      const d = new Date(today); d.setDate(today.getDate() - i);
+      const date = ymd(d);
+      const r = await fetchDay(date);
+      if (r.status === 401 || r.status === 403){ authErr = true; break; }
+      if (r.data && Object.keys(r.data).length){ found = r.data; foundDate = date; break; }
     }
 
-    const data = resolveLatestData(raw);
+    let dataRaw;
+    if (found){
+      dataRaw = found;
+      lastUpdatedText = foundDate;
+      ds.textContent = `● AWS Günlük Veri · ${foundDate} (${labelCamera()})`;
+      ds.style.color = '#16A34A';
+    } else if (authErr){
+      dataRaw = {};
+      ds.textContent = '● Yetki hatası (yeniden giriş gerekebilir)';
+      ds.style.color = '#C03050';
+    } else {
+      dataRaw = {};
+      lastUpdatedText = '';
+      ds.textContent = '● Son 14 günde kayıt yok';
+      ds.style.color = '#C03050';
+    }
+
+    const data = normalizeReport(dataRaw);
     renderTable(data);
     renderWelcome(data);
   }
