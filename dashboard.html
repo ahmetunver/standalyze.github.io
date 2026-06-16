@@ -303,6 +303,29 @@
   function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; }
   async function authHeader(){ try{ const t=await Auth.idToken(); return t?{Authorization:'Bearer '+t}:{}; }catch(e){ return {}; } }
 
+  // ── Görev tanımı (rol) — AWS'den okunur, DURUM sütununda kullanılır ──
+  const ROLE_ACTIVE = { saha:['standing','walking'], masabasi:['sitting','standing','walking'] };
+  const ROLE_LABEL  = { saha:'Saha', masabasi:'Masabaşı' };
+  let workerRoles = {};
+  function roleOf(name){ return workerRoles[(name||'').toLowerCase()] || 'saha'; }
+  async function loadRoles(){
+    if(!API_URL) return;
+    try{
+      const r = await fetch(`${API_URL}/standalyze-config`, { headers:{ Accept:'application/json', ...(await authHeader()) } });
+      if(!r.ok) return;
+      const j = await r.json();
+      if(j && j.roles && typeof j.roles==='object'){ workerRoles={}; Object.keys(j.roles).forEach(k=>workerRoles[k.toLowerCase()]=String(j.roles[k]).toLowerCase()); }
+    }catch(e){}
+  }
+  // role göre aktif hareket oranı (%) — saniyeden, veri yoksa null
+  function activeRate(acts, role){
+    const tot = acts.standing.seconds+acts.walking.seconds+acts.sitting.seconds+acts.unknown.seconds;
+    if(tot<=0) return null;
+    const keys = ROLE_ACTIVE[role] || ROLE_ACTIVE.saha;
+    const active = keys.reduce((s,k)=>s+(acts[k].seconds||0),0);
+    return Math.round(active/tot*100);
+  }
+
   function labelCamera(cam = activeCamera) {
     return cam === 'both' ? 'CAM7+CAM8' : cam;
   }
@@ -506,6 +529,8 @@
       const pct = Math.min(Math.round((totalMin / MAX_MIN) * 100), 100);
       const initials = name.slice(0,2).toUpperCase();
       const capName = name.charAt(0).toUpperCase() + name.slice(1);
+      const role = roleOf(name);
+      const rate = activeRate(acts, role);
 
       const tr = document.createElement('tr');
       tr.style.cursor = 'pointer';
@@ -531,8 +556,8 @@
         </td>
         <td>
           <div style="display:flex;flex-direction:column;gap:2px">
-            <span style="font-size:10px;color:#7060D0;font-weight:600">Ayakta ${Math.round(acts.standing.percent)}%</span>
-            <span style="font-size:10px;color:#8B85A8">Yürüme ${secToMin(acts.walking.seconds)}dk</span>
+            <span style="font-size:11px;color:#7060D0;font-weight:700">${rate==null ? '—' : 'Aktiflik %'+rate}</span>
+            <span style="font-size:10px;color:#8B85A8">${ROLE_LABEL[role]}</span>
           </div>
         </td>
       `;
@@ -540,7 +565,7 @@
     });
   }
 
-  loadData();
+  (async () => { await loadRoles(); loadData(); })();
 </script>
   <!-- ÇIKIŞ: kullanıcı kartına tıklayınca oturum kapanır -->
   <script>
