@@ -112,7 +112,6 @@
           <button class="cam-btn" data-cam="CAM7" onclick="setCamera('CAM7')" style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:400;background:transparent;color:#6B5FD4;">CAM7</button>
           <button class="cam-btn" data-cam="CAM8" onclick="setCamera('CAM8')" style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:400;background:transparent;color:#6B5FD4;">CAM8</button>
         </div>
-        <input type="date" id="datePicker" onchange="onDateChange()" style="border:1px solid #E6E2F4;border-radius:8px;padding:4px 8px;font-size:12px;color:#1A1635;font-family:inherit;cursor:pointer" />
         <span class="topbar-date" id="dateStr"></span>
         <button class="notif-btn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -310,9 +309,6 @@
   let lastUpdatedText = '';
 
   function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; }
-  function isoToday(){ return ymd(new Date()); }
-  let activeDate = isoToday();
-  function onDateChange(){ activeDate = document.getElementById('datePicker').value || isoToday(); loadData(); }
   async function authHeader(){ try{ const t=await Auth.idToken(); return t?{Authorization:'Bearer '+t}:{}; }catch(e){ return {}; } }
 
   // ── Görev tanımı (rol) — AWS'den okunur, DURUM sütununda kullanılır ──
@@ -485,20 +481,31 @@
     const ds = document.getElementById('dataSource');
     ds.textContent = '● Yükleniyor…'; ds.style.color = '#8B85A8';
 
-    const r = await fetchDay(activeDate);   // SADECE seçilen gün
+    // En son veri olan günü bul (bugünden geriye doğru, 14 güne kadar)
+    let found = null, foundDate = null, authErr = false;
+    const today = new Date();
+    for (let i = 0; i < 14; i++){
+      const dd = new Date(today); dd.setDate(today.getDate() - i);
+      const date = ymd(dd);
+      const r = await fetchDay(date);
+      if (r.status === 401 || r.status === 403){ authErr = true; break; }
+      if (r.data && Object.keys(r.data).length){ found = r.data; foundDate = date; break; }
+    }
+
     let dataRaw;
-    if (r.status === 401 || r.status === 403){
-      dataRaw = {};
-      ds.textContent = '● Yetki hatası (yeniden giriş gerekebilir)'; ds.style.color = '#C03050';
-    } else if (r.data && Object.keys(r.data).length){
-      dataRaw = r.data;
-      lastUpdatedText = activeDate;
-      ds.textContent = `● AWS Günlük Veri · ${activeDate} (${labelCamera()})`;
+    if (found){
+      dataRaw = found;
+      lastUpdatedText = foundDate;
+      ds.textContent = `● AWS Son Veri · ${foundDate} (${labelCamera()})`;
       ds.style.color = '#16A34A';
+    } else if (authErr){
+      dataRaw = {};
+      ds.textContent = '● Yetki hatası (yeniden giriş gerekebilir)';
+      ds.style.color = '#C03050';
     } else {
       dataRaw = {};
-      lastUpdatedText = activeDate;
-      ds.textContent = `● ${activeDate} — bu güne ait kayıt yok`;
+      lastUpdatedText = '';
+      ds.textContent = '● Son 14 günde kayıt yok';
       ds.style.color = '#C03050';
     }
 
@@ -516,7 +523,7 @@
     const names = Object.keys(data);
     document.getElementById('activeCount').textContent = names.length;
     document.getElementById('welcomeDesc').textContent =
-      `${activeDate} tarihinde ${names.length} çalışan analiz edildi, 2 kamera çevrimiçi.`;
+      `Son güncel veride ${names.length} çalışan analiz edildi, 2 kamera çevrimiçi${lastUpdatedText ? ' · Güncelleme: ' + lastUpdatedText : ''}.`;
 
     // ── Gerçek KPI'lar ──
     const extras = JSON.parse(localStorage.getItem('extraEmployees') || '[]').map(e => (e.name || '').toLowerCase());
@@ -577,11 +584,7 @@
     });
   }
 
-  (async () => {
-    document.getElementById('datePicker').value = activeDate;
-    await loadRoles();
-    loadData();
-  })();
+  (async () => { await loadRoles(); loadData(); })();
 </script>
   <!-- ÇIKIŞ: kullanıcı kartına tıklayınca oturum kapanır -->
   <script>
