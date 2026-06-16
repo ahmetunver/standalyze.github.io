@@ -112,6 +112,7 @@
           <button class="cam-btn" data-cam="CAM7" onclick="setCamera('CAM7')" style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:400;background:transparent;color:#6B5FD4;">CAM7</button>
           <button class="cam-btn" data-cam="CAM8" onclick="setCamera('CAM8')" style="border:none;cursor:pointer;border-radius:6px;padding:3px 9px;font-size:11px;font-weight:400;background:transparent;color:#6B5FD4;">CAM8</button>
         </div>
+        <input type="date" id="datePicker" onchange="onDateChange()" style="border:1px solid #E6E2F4;border-radius:8px;padding:4px 8px;font-size:12px;color:#1A1635;font-family:inherit;cursor:pointer" />
         <span class="topbar-date" id="dateStr"></span>
         <button class="notif-btn">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -128,7 +129,7 @@
       <!-- welcome banner -->
       <div class="welcome">
         <div class="welcome-text">
-          <h2>Günaydın, Admin</h2>
+          <h2 id="greetHead">Günaydın, Admin</h2>
           <p id="welcomeDesc">Sistemde bugün 7 çalışan analiz edildi, 2 kamera çevrimiçi.</p>
         </div>
         <div class="welcome-badge">
@@ -282,6 +283,14 @@
   const opts = { weekday:'long', year:'numeric', month:'long', day:'numeric' };
   document.getElementById('dateStr').textContent = d.toLocaleDateString('tr-TR', opts);
 
+  // Saate göre selamlama
+  (function(){
+    const h = new Date().getHours();
+    const g = h < 6 ? 'İyi geceler' : h < 12 ? 'Günaydın' : h < 18 ? 'İyi günler' : 'İyi akşamlar';
+    const el = document.getElementById('greetHead');
+    if (el) el.textContent = `${g}, Admin`;
+  })();
+
   /* ── AVATAR COLORS ── */
   const colors = [
     'linear-gradient(135deg,#7060D0,#A890F0)',
@@ -301,6 +310,9 @@
   let lastUpdatedText = '';
 
   function ymd(d){ const z=n=>String(n).padStart(2,'0'); return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`; }
+  function isoToday(){ return ymd(new Date()); }
+  let activeDate = isoToday();
+  function onDateChange(){ activeDate = document.getElementById('datePicker').value || isoToday(); loadData(); }
   async function authHeader(){ try{ const t=await Auth.idToken(); return t?{Authorization:'Bearer '+t}:{}; }catch(e){ return {}; } }
 
   // ── Görev tanımı (rol) — AWS'den okunur, DURUM sütununda kullanılır ──
@@ -473,31 +485,20 @@
     const ds = document.getElementById('dataSource');
     ds.textContent = '● Yükleniyor…'; ds.style.color = '#8B85A8';
 
-    // Bugünden geriye doğru, veri olan ilk günü bul (en son güncel)
-    let found = null, foundDate = null, authErr = false;
-    const today = new Date();
-    for (let i = 0; i < 14; i++){
-      const d = new Date(today); d.setDate(today.getDate() - i);
-      const date = ymd(d);
-      const r = await fetchDay(date);
-      if (r.status === 401 || r.status === 403){ authErr = true; break; }
-      if (r.data && Object.keys(r.data).length){ found = r.data; foundDate = date; break; }
-    }
-
+    const r = await fetchDay(activeDate);   // SADECE seçilen gün
     let dataRaw;
-    if (found){
-      dataRaw = found;
-      lastUpdatedText = foundDate;
-      ds.textContent = `● AWS Günlük Veri · ${foundDate} (${labelCamera()})`;
-      ds.style.color = '#16A34A';
-    } else if (authErr){
+    if (r.status === 401 || r.status === 403){
       dataRaw = {};
-      ds.textContent = '● Yetki hatası (yeniden giriş gerekebilir)';
-      ds.style.color = '#C03050';
+      ds.textContent = '● Yetki hatası (yeniden giriş gerekebilir)'; ds.style.color = '#C03050';
+    } else if (r.data && Object.keys(r.data).length){
+      dataRaw = r.data;
+      lastUpdatedText = activeDate;
+      ds.textContent = `● AWS Günlük Veri · ${activeDate} (${labelCamera()})`;
+      ds.style.color = '#16A34A';
     } else {
       dataRaw = {};
-      lastUpdatedText = '';
-      ds.textContent = '● Son 14 günde kayıt yok';
+      lastUpdatedText = activeDate;
+      ds.textContent = `● ${activeDate} — bu güne ait kayıt yok`;
       ds.style.color = '#C03050';
     }
 
@@ -515,7 +516,7 @@
     const names = Object.keys(data);
     document.getElementById('activeCount').textContent = names.length;
     document.getElementById('welcomeDesc').textContent =
-      `Son güncel veride ${names.length} çalışan analiz edildi, 2 kamera çevrimiçi${lastUpdatedText ? ' · Güncelleme: ' + lastUpdatedText : ''}.`;
+      `${activeDate} tarihinde ${names.length} çalışan analiz edildi, 2 kamera çevrimiçi.`;
 
     // ── Gerçek KPI'lar ──
     const extras = JSON.parse(localStorage.getItem('extraEmployees') || '[]').map(e => (e.name || '').toLowerCase());
@@ -576,7 +577,11 @@
     });
   }
 
-  (async () => { await loadRoles(); loadData(); })();
+  (async () => {
+    document.getElementById('datePicker').value = activeDate;
+    await loadRoles();
+    loadData();
+  })();
 </script>
   <!-- ÇIKIŞ: kullanıcı kartına tıklayınca oturum kapanır -->
   <script>
