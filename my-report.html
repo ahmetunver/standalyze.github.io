@@ -92,22 +92,34 @@
         <div class="panel">
           <div class="panel-header">
             <div>
-              <div class="panel-title">Kişisel Aktivite Dağılımı</div>
-              <div class="panel-sub">Seçili günün toplam süre dağılımı</div>
+              <div class="panel-title">Aktivite Kompozisyonu</div>
+              <div class="panel-sub">Seçili günün duruş dağılımı (%)</div>
             </div>
           </div>
-          <canvas id="donutChart"></canvas>
+          <div id="composition" style="padding-top:4px"></div>
         </div>
 
         <div class="panel">
           <div class="panel-header">
             <div>
-              <div class="panel-title">Aktivite Detayı</div>
-              <div class="panel-sub">Süre ve yüzde olarak</div>
+              <div class="panel-title">Aktiflik / Hareket Oranı</div>
+              <div class="panel-sub">Görevine göre aktif hareket yüzdesi</div>
             </div>
           </div>
-          <div id="barList"></div>
+          <div id="activeRate" style="padding-top:6px"></div>
         </div>
+      </div>
+
+      <!-- Kişisel Aktiflik Isı Haritası (son 14 gün) -->
+      <div class="panel" style="margin-top:18px">
+        <div class="panel-header">
+          <div>
+            <div class="panel-title">Aktiflik Isı Haritası</div>
+            <div class="panel-sub">Son 14 günün gün gün aktiflik oranı (koyu = daha aktif)</div>
+          </div>
+        </div>
+        <div id="heatmap" style="overflow-x:auto"></div>
+        <div id="heatmapLegend" style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:12px;font-size:12px;color:#8B85A8"></div>
       </div>
 
     </div>
@@ -161,6 +173,127 @@
     const m = Math.floor(s / 60);
     const sec = Math.round(s % 60);
     return m > 0 ? `${m}dk ${sec}s` : `${sec}s`;
+  }
+
+  /* ════════ reports.html ile aynı grafik türleri (kişiye özel) ════════ */
+
+  // ── Görev (rol) — AWS'den okunur (employees'te atanan) ──
+  const ROLE_ACTIVE = { saha:['standing','walking'], masabasi:['sitting','standing','walking'] };
+  const ROLE_LABEL  = { saha:'Saha', masabasi:'Masabaşı' };
+  let MY_ROLE = 'saha';
+  async function loadRole(){
+    if(!API_URL || API_URL.includes('XXXX')) return;
+    try{
+      const r = await fetch(`${API_URL}/standalyze-config`, { headers:{ 'Accept':'application/json', ...(await authHeader()) } });
+      if(!r.ok) return;
+      const j = await r.json();
+      const key = (USER||'').toLowerCase();
+      if(j && j.roles && j.roles[key]) MY_ROLE = String(j.roles[key]).toLowerCase();
+    }catch(e){}
+  }
+  function activeRateFrom(acc, role){
+    const tot = (acc.standing||0)+(acc.walking||0)+(acc.sitting||0)+(acc.unknown||0);
+    if(tot<=0) return null;
+    const active = (ROLE_ACTIVE[role]||ROLE_ACTIVE.saha).reduce((s,k)=>s+(acc[k]||0),0);
+    return Math.round(active/tot*100);
+  }
+
+  // ── tarih aralığı + seri (ısı haritası için) ──
+  function isoShift(iso, days){ const d=new Date(iso+'T00:00:00'); d.setDate(d.getDate()+days); return ymd(d); }
+  function dateRange(from, to){ const out=[]; let d=new Date(from+'T00:00:00'); const end=new Date(to+'T00:00:00'); while(d<=end){ out.push(ymd(d)); d.setDate(d.getDate()+1);} return out; }
+  function trShort(iso){ const d=new Date(iso+'T00:00:00'); return d.toLocaleDateString('tr-TR',{day:'2-digit',month:'2-digit'}); }
+  function dayAcc(rec){
+    return {
+      standing: Number(rec.standing_seconds ?? (rec.standing&&rec.standing.seconds) ?? 0),
+      walking:  Number(rec.walking_seconds  ?? (rec.walking&&rec.walking.seconds)  ?? 0),
+      sitting:  Number(rec.sitting_seconds  ?? (rec.sitting&&rec.sitting.seconds)  ?? 0),
+      unknown:  Number(rec.unknown_seconds  ?? (rec.unknown&&rec.unknown.seconds)  ?? 0),
+    };
+  }
+  async function fetchMySeries(from, to){
+    if(!API_URL || API_URL.includes('XXXX')) return {};
+    try{
+      const u = `${API_URL}/standalyze-series?worker=${encodeURIComponent(USER)}&from=${from}&to=${to}&camera=both`;
+      const r = await fetch(u, { headers:{ 'Accept':'application/json', ...(await authHeader()) } });
+      if(!r.ok) return {};
+      const j = await r.json();
+      const by = {};
+      (j.days||[]).forEach(d => { by[d.date] = d; });
+      return by;
+    }catch(e){ return {}; }
+  }
+
+  // ── Aktivite Kompozisyonu (kişi için %100 yığılmış bar) ──
+  function renderComposition(a){
+    const host = document.getElementById('composition'); if(!host) return;
+    const SEG = [
+      {key:'standing', label:'Ayakta',     color:'#7060D0'},
+      {key:'walking',  label:'Yürüme',     color:'#40A878'},
+      {key:'sitting',  label:'Oturma',     color:'#D06080'},
+      {key:'unknown',  label:'Bilinmiyor', color:'#C9C2E8'},
+    ];
+    const sec = { standing:a.standing.seconds, walking:a.walking.seconds, sitting:a.sitting.seconds, unknown:a.unknown.seconds };
+    const tot = sec.standing+sec.walking+sec.sitting+sec.unknown;
+    const segs = SEG.map(s => {
+      const pct = tot>0 ? (sec[s.key]/tot*100) : 0;
+      const dark = s.key!=='unknown';
+      const lbl = pct>=8 ? Math.round(pct)+'%' : '';
+      return `<div title="${s.label} · %${tot>0?Math.round(sec[s.key]/tot*100):0}" style="width:${pct}%;background:${s.color};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;color:${dark?'#fff':'#5A5470'};overflow:hidden">${lbl}</div>`;
+    }).join('');
+    const legend = SEG.map(s => `<span style="display:flex;align-items:center;gap:5px"><span style="width:11px;height:11px;border-radius:3px;background:${s.color}"></span>${s.label}</span>`).join('');
+    host.innerHTML = `
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:14px;font-size:12px;color:#8B85A8">${legend}</div>
+      <div style="display:flex;height:30px;border-radius:8px;overflow:hidden;border:1px solid #ECE9F6">${segs}</div>`;
+  }
+
+  // ── Aktiflik / Hareket Oranı (rol bazlı) ──
+  function renderActiveRate(a){
+    const host = document.getElementById('activeRate'); if(!host) return;
+    const acc = { standing:a.standing.seconds, walking:a.walking.seconds, sitting:a.sitting.seconds, unknown:a.unknown.seconds };
+    const rate = activeRateFrom(acc, MY_ROLE);
+    const pct = rate==null ? 0 : rate;
+    host.innerHTML = `
+      <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:10px">
+        <span style="font-size:34px;font-weight:800;color:#7060D0;line-height:1">${rate==null?'—':'%'+rate}</span>
+        <span style="font-size:13px;color:#8B85A8">aktif hareket</span>
+      </div>
+      <div style="height:14px;border-radius:8px;background:#EFECFF;overflow:hidden;margin-bottom:10px">
+        <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#7060D0,#5E87D4)"></div>
+      </div>
+      <div style="font-size:12px;color:#8B85A8">Görev: <b style="color:#1A1635">${ROLE_LABEL[MY_ROLE]}</b> · aktif sayılan: ${MY_ROLE==='saha'?'ayakta + yürüme':'oturma + ayakta + yürüme'}</div>`;
+  }
+
+  // ── Kişisel Aktiflik Isı Haritası (son 14 gün, tek satır) ──
+  function heatColor(v){
+    if(v==null) return null;
+    if(v<40) return '#EEEDFE'; if(v<55) return '#CECBF6'; if(v<70) return '#AFA9EC'; if(v<85) return '#7F77DD'; return '#534AB7';
+  }
+  async function renderHeatmap(){
+    const host = document.getElementById('heatmap'); if(!host) return;
+    const to = activeDate, from = isoShift(activeDate, -13);
+    const days = dateRange(from, to);
+    const series = await fetchMySeries(from, to);
+    const N = days.length;
+    let html = `<div style="display:grid;grid-template-columns:repeat(${N}, minmax(30px,1fr));gap:3px;min-width:${N*33}px">`;
+    days.forEach(d => { html += `<div style="text-align:center;font-size:9px;color:#8B85A8;padding-bottom:3px">${trShort(d)}</div>`; });
+    days.forEach(d => {
+      const rec = series[d];
+      const v = rec ? activeRateFrom(dayAcc(rec), MY_ROLE) : null;
+      if(v==null){
+        html += `<div title="${trDay(d)} · veri yok" style="height:34px;border-radius:6px;border:1px dashed #E0DCEE;background:#FAF9FE;display:flex;align-items:center;justify-content:center;font-size:9px;color:#C7C0E0">–</div>`;
+      } else {
+        const fg = v>=70?'#fff':'#26215C';
+        html += `<div title="${trDay(d)} · %${v} aktif" style="height:34px;border-radius:6px;background:${heatColor(v)};color:${fg};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600">${v}</div>`;
+      }
+    });
+    html += `</div>`;
+    host.innerHTML = html;
+    const lg = document.getElementById('heatmapLegend');
+    if(lg){
+      const items=[['#EEEDFE','<%40'],['#CECBF6','%40–54'],['#AFA9EC','%55–69'],['#7F77DD','%70–84'],['#534AB7','%85+']];
+      lg.innerHTML = items.map(it=>`<span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:${it[0]}"></span>${it[1]}</span>`).join('')
+        + `<span style="display:flex;align-items:center;gap:5px"><span style="width:12px;height:12px;border-radius:3px;background:#FAF9FE;border:1px dashed #E0DCEE"></span>veri yok</span>`;
+    }
   }
 
   function hasActivity(obj) {
@@ -253,8 +386,9 @@
     document.getElementById('pageSubtitle').textContent = msg;
     document.getElementById('statRow').innerHTML =
       '<div class="panel" style="grid-column:1/-1;text-align:center;color:#8B85A8;font-size:13px">Kayıt bulunamadı.</div>';
-    document.getElementById('barList').innerHTML = '';
-    if (donutChart) { donutChart.destroy(); donutChart = null; }
+    const comp = document.getElementById('composition'); if(comp) comp.innerHTML = '<div style="padding:20px 0;text-align:center;color:#A09BB8;font-size:13px">Bu güne ait kayıt yok</div>';
+    const ar = document.getElementById('activeRate'); if(ar) ar.innerHTML = '<div style="padding:20px 0;text-align:center;color:#A09BB8;font-size:13px">—</div>';
+    renderHeatmap();   // gün boş olsa da son 14 günlük trendi göster
     window.__me = null;
   }
 
@@ -329,43 +463,10 @@
       </div>
     `).join('');
 
-    if (donutChart) donutChart.destroy();
-
-    // donut — kişisel dağılım
-    donutChart = new Chart(document.getElementById('donutChart'), {
-      type: 'doughnut',
-      data: {
-        labels: ['Ayakta','Yürüme','Oturma','Bilinmiyor'],
-        datasets: [{
-          data: [a.standing.seconds, a.walking.seconds, a.sitting.seconds, a.unknown.seconds].map(v => +v.toFixed(1)),
-          backgroundColor: ['#7060D0','#5E87D4','#D06080','#E0DAF8'],
-          borderWidth: 0, hoverOffset: 6,
-        }]
-      },
-      options: {
-        responsive: true, maintainAspectRatio: true, cutout: '68%',
-        plugins: {
-          legend: { position:'bottom', labels:{ font:{family:'Plus Jakarta Sans',size:11}, padding:12, usePointStyle:true } },
-          tooltip: { callbacks: { label: ctx => ` ${ctx.label}: ${(ctx.raw/60).toFixed(1)}dk (${total > 0 ? Math.round(ctx.raw/total*100) : 0}%)` } }
-        }
-      }
-    });
-
-    // aktivite detay barları
-    const acts = [
-      { label:'Ayakta',     d:a.standing, color:'#7060D0' },
-      { label:'Yürüme',     d:a.walking,  color:'#5E87D4' },
-      { label:'Oturma',     d:a.sitting,  color:'#D06080' },
-      { label:'Bilinmiyor', d:a.unknown,  color:'#C0BAD8' },
-    ];
-    document.getElementById('barList').innerHTML = acts.map(x => `
-      <div class="bar-row">
-        <span class="bar-label">${x.label}</span>
-        <div class="bar-bg"><div class="bar-fill" style="width:${x.d.percent}%;background:${x.color}"></div></div>
-        <span class="bar-pct" style="color:${x.color}">${Math.round(x.d.percent)}%</span>
-        <span class="bar-sec">${secFmt(x.d.seconds)}</span>
-      </div>
-    `).join('');
+    // Aktivite Kompozisyonu + Aktiflik/Hareket Oranı + kişisel Isı Haritası
+    renderComposition(a);
+    renderActiveRate(a);
+    renderHeatmap();   // son 14 gün (async, kendi içinde günceller)
 
     // CSV için sakla
     window.__me = a;
@@ -388,7 +489,7 @@
 
   // İlk yükleme
   document.getElementById('datePicker').value = activeDate;
-  loadData();
+  (async () => { await loadRole(); loadData(); })();
 </script>
 </body>
 </html>
