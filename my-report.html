@@ -10,6 +10,9 @@
   <title>Standalyze — Takip Raporum</title>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <!-- PDF indirme için (no-build, CDN) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
   <link rel="stylesheet" href="app.css" />
   <style>
     /* Üst bardaki tarih seçici (reports.html ile aynı görünüm) */
@@ -77,9 +80,9 @@
           <p id="pageSubtitle">Kişisel aktivite özetin yükleniyor...</p>
         </div>
         <div class="header-actions">
-          <button class="btn-outline" onclick="exportCSV()">
+          <button class="btn-outline" onclick="exportPDF()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            CSV İndir
+            PDF İndir
           </button>
           <button class="btn-outline danger" onclick="logout()">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -476,19 +479,124 @@
     window.__me = a;
   }
 
-  function exportCSV() {
+  // ── PDF İNDİR — tarayıcı render'ı ile (Türkçe karakterler düzgün) + şık tasarım ──
+  async function exportPDF() {
     const a = window.__me;
-    if (!a) return;
+    if (!a) { alert(`${trDay(activeDate)} için indirilebilecek veri yok.`); return; }
+    if (!window.jspdf || !window.jspdf.jsPDF || !window.html2canvas) {
+      alert('PDF kütüphaneleri yüklenemedi. İnternet bağlantını kontrol et.'); return;
+    }
+
     const total = a.standing.seconds + a.walking.seconds + a.sitting.seconds + a.unknown.seconds;
-    const rows = [
-      ['Tarih','İsim','Ayakta(s)','Ayakta(%)','Yürüme(s)','Yürüme(%)','Oturma(s)','Oturma(%)','Bilinmiyor(s)','Toplam(s)'],
-      [activeDate, CAP, a.standing.seconds, a.standing.percent, a.walking.seconds, a.walking.percent, a.sitting.seconds, a.sitting.percent, a.unknown.seconds, total.toFixed(1)]
-    ];
-    const csv = rows.map(r => r.join(',')).join('\n');
-    const link = document.createElement('a');
-    link.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
-    link.download = `${USER}_takip_raporu_${activeDate}.csv`;
-    link.click();
+    const acc = { standing:a.standing.seconds, walking:a.walking.seconds, sitting:a.sitting.seconds, unknown:a.unknown.seconds };
+    const rate = activeRateFrom(acc, MY_ROLE);
+
+    // Mevcut grafik panellerini görüntüye çevir
+    const shot = async (id) => {
+      try { const el = document.getElementById(id); if (!el) return ''; return (await html2canvas(el, { backgroundColor:'#ffffff', scale:2 })).toDataURL('image/png'); }
+      catch(e){ return ''; }
+    };
+    const compImg = await shot('composition');
+    const rateImg = await shot('activeRate');
+    const heatImg = await shot('heatmap');
+
+    const card = (label, val, col) => `
+      <div style="flex:1;background:#F7F6FF;border:1px solid #ECE8FB;border-radius:14px;padding:16px 18px">
+        <div style="font-size:12px;color:#8B85A8;margin-bottom:6px">${label}</div>
+        <div style="font-size:22px;font-weight:800;color:${col}">${val}</div>
+      </div>`;
+    const chartCard = (title, img) => img ? `
+      <div style="flex:1;background:#fff;border:1px solid #ECE8FB;border-radius:14px;padding:16px">
+        <div style="font-size:13px;font-weight:700;color:#1A1635;margin-bottom:8px">${title}</div>
+        <img src="${img}" style="width:100%;display:block"/>
+      </div>` : '';
+
+    const actRow = (label, d, col) => `<tr>
+      <td style="text-align:left;font-weight:600;color:#1A1635"><span style="display:inline-block;width:10px;height:10px;border-radius:3px;background:${col};margin-right:8px"></span>${label}</td>
+      <td>${secFmt(d.seconds)}</td>
+      <td style="font-weight:700;color:${col}">%${Math.round(d.percent)}</td>
+    </tr>`;
+
+    const sheet = document.createElement('div');
+    sheet.style.cssText = 'position:fixed;left:-99999px;top:0;width:820px;background:#fff;'
+      + "font-family:'Plus Jakarta Sans',sans-serif;color:#1A1635;";
+    sheet.innerHTML = `
+      <div style="padding:0 0 28px 0">
+        <div style="height:10px;background:linear-gradient(90deg,#7060D0,#5E87D4)"></div>
+        <div style="padding:26px 36px 0 36px">
+          <div style="display:flex;align-items:center;gap:12px">
+            <div style="width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,#7060D0,#5E87D4);display:flex;align-items:center;justify-content:center">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><circle cx="12" cy="10" r="2.5"/></svg>
+            </div>
+            <div>
+              <div style="font-size:22px;font-weight:800;letter-spacing:-.3px">Standalyze — Kişisel Aktivite Raporu</div>
+              <div style="font-size:12px;color:#8B85A8;margin-top:2px">${CAP}  ·  CAM7+CAM8  ·  ${trDay(activeDate)}</div>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:12px;margin-top:22px">
+            ${card('Toplam Süre', secFmt(total), '#7060D0')}
+            ${card('Aktiflik / Hareket', rate==null?'—':'%'+rate, '#7060D0')}
+            ${card('Görev', ROLE_LABEL[MY_ROLE], '#5E87D4')}
+          </div>
+
+          <div style="display:flex;gap:12px;margin-top:14px">
+            ${chartCard('Aktivite Kompozisyonu', compImg)}
+            ${chartCard('Aktiflik / Hareket Oranı', rateImg)}
+          </div>
+
+          ${heatImg ? `<div style="margin-top:14px">${chartCard('Aktiflik Isı Haritası (son 14 gün)', heatImg)}</div>` : ''}
+
+          <div style="margin-top:14px;background:#fff;border:1px solid #ECE8FB;border-radius:14px;overflow:hidden">
+            <table style="width:100%;border-collapse:collapse;font-size:13px;text-align:center">
+              <thead>
+                <tr style="background:#7060D0;color:#fff">
+                  <th style="text-align:left;padding:11px 14px">Aktivite</th>
+                  <th style="padding:11px 14px">Süre</th>
+                  <th style="padding:11px 14px">Yüzde</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${actRow('Ayakta',     a.standing, '#7060D0')}
+                ${actRow('Yürüme',     a.walking,  '#40A878')}
+                ${actRow('Oturma',     a.sitting,  '#D06080')}
+                ${actRow('Bilinmiyor', a.unknown,  '#C9C2E8')}
+              </tbody>
+            </table>
+          </div>
+
+          <div style="margin-top:18px;font-size:11px;color:#A89FD8">
+            Standalyze · ${new Date().toLocaleString('tr-TR')}
+          </div>
+        </div>
+      </div>`;
+    sheet.querySelectorAll('tbody td').forEach(td => td.style.cssText += ';padding:10px 14px;border-top:1px solid #F0EEF8');
+    document.body.appendChild(sheet);
+
+    try {
+      const canvas = await html2canvas(sheet, { scale: 2, backgroundColor: '#ffffff', useCORS: true, imageTimeout: 0 });
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF({ unit:'pt', format:'a4' });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const imgW  = pageW;
+      const imgH  = canvas.height * (pageW / canvas.width);
+      const data  = canvas.toDataURL('image/jpeg', 0.95);
+      let heightLeft = imgH, position = 0;
+      pdf.addImage(data, 'JPEG', 0, position, imgW, imgH);
+      heightLeft -= pageH;
+      while (heightLeft > 0) {
+        position = heightLeft - imgH;
+        pdf.addPage();
+        pdf.addImage(data, 'JPEG', 0, position, imgW, imgH);
+        heightLeft -= pageH;
+      }
+      pdf.save(`${USER}_takip_raporu_${activeDate}.pdf`);
+    } catch (e) {
+      alert('PDF oluşturulurken hata oluştu: ' + e.message);
+    } finally {
+      document.body.removeChild(sheet);
+    }
   }
 
   // ── Şifre değiştir (Cognito changePassword — oturum üzerinden, hiçbir yere kaydedilmez) ──
