@@ -158,13 +158,19 @@
     // ── Veriyi çek, bildirimleri kur ──
     (async function () {
       render(); // boş başlangıç
+      // auth.js token'ı hazır olana kadar kısa bekleme: sayfanın kendi isteğiyle
+      // eşzamanlı token yenilemesi çakışıp zili token'sız bırakmasın.
+      for (var w = 0; w < 12; w++) {
+        var hdr = await authHeader();
+        if (hdr && hdr.Authorization) break;
+        await new Promise(function (res) { setTimeout(res, 300); });
+      }
       await loadRoles();
       var found = null, foundDate = null, today = new Date();
       for (var i = 0; i < 14; i++) {
         var dd = new Date(today); dd.setDate(today.getDate() - i);
         var date = ymd(dd);
         var r = await fetchDay(date);
-        if (r.status === 401 || r.status === 403) break;
         if (r.data && Object.keys(r.data).length) { found = r.data; foundDate = date; break; }
       }
       build(found || {}, foundDate);
