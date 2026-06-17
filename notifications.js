@@ -109,21 +109,29 @@
     function trDayFull(iso) { if (!iso) return ''; var d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('tr-TR', { day: '2-digit', month: 'long', year: 'numeric' }); }
 
     var NOTIFS = [];
+    var SEEN_KEY = 'standalyze_notif_seen';
+    function loadSeen() { try { return JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'); } catch (e) { return []; } }
+    function saveSeen(arr) { try { localStorage.setItem(SEEN_KEY, JSON.stringify(arr.slice(-150))); } catch (e) {} }
+    function markAllSeen() { var s = loadSeen(); NOTIFS.forEach(function (it) { if (it.id && s.indexOf(it.id) === -1) s.push(it.id); }); saveSeen(s); }
+    function unseenCount() { var s = loadSeen(); return NOTIFS.filter(function (it) { return it.id && s.indexOf(it.id) === -1; }).length; }
     function render() {
+      var seen = loadSeen();
       var list = panel.querySelector('#notifList');
       if (!NOTIFS.length) {
         list.innerHTML = '<div style="padding:20px 16px;text-align:center;color:#A09BB8;font-size:13px;font-family:inherit">Yeni bildirim yok</div>';
       } else {
         list.innerHTML = NOTIFS.map(function (it) {
-          return '<div style="display:flex;gap:10px;padding:12px 16px;border-bottom:1px solid #F4F2FB;font-family:inherit">'
+          var isNew = it.id && seen.indexOf(it.id) === -1;
+          var badge = isNew ? ' <span style="display:inline-block;vertical-align:middle;margin-left:6px;font-size:10px;font-weight:700;color:#7060D0;background:#EFECFF;border-radius:6px;padding:1px 6px">yeni</span>' : '';
+          return '<div style="display:flex;gap:10px;padding:12px 16px;border-bottom:1px solid #F4F2FB;font-family:inherit;' + (isNew ? 'background:#FAF9FF' : '') + '">'
             + '<div style="flex:0 0 30px;width:30px;height:30px;border-radius:9px;background:' + it.color + '1A;display:flex;align-items:center;justify-content:center">'
             + '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="' + it.color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + iconSvg(it.icon) + '</svg></div>'
-            + '<div style="min-width:0"><div style="font-size:13px;font-weight:600;color:#1A1635">' + it.title + '</div>'
+            + '<div style="min-width:0"><div style="font-size:13px;font-weight:600;color:#1A1635">' + it.title + badge + '</div>'
             + '<div style="font-size:12px;color:#8B85A8;margin-top:2px;line-height:1.4">' + it.desc + '</div></div></div>';
         }).join('');
       }
       var dot = btn.querySelector('.notif-dot');
-      if (dot) dot.style.display = NOTIFS.length ? 'block' : 'none';
+      if (dot) dot.style.display = unseenCount() ? 'block' : 'none';
     }
 
     function build(data, date) {
@@ -135,15 +143,15 @@
       var cap = function (s) { return s.charAt(0).toUpperCase() + s.slice(1); };
       var items = [];
       if (date && names.length) {
-        items.push({ color: '#16A34A', icon: 'doc', title: 'Günlük rapor hazır', desc: trDayFull(date) + ' · ' + names.length + ' çalışan analiz edildi.' });
+        items.push({ id: 'report:' + date, color: '#16A34A', icon: 'doc', title: 'Günlük rapor hazır', desc: trDayFull(date) + ' · ' + names.length + ' çalışan analiz edildi.' });
         var missing = roster.filter(function (n) { return names.indexOf(n) === -1; });
-        if (missing.length) items.push({ color: '#D97706', icon: 'eye', title: missing.length + ' çalışan görülmedi', desc: missing.map(cap).join(', ') });
+        if (missing.length) items.push({ id: 'missing:' + date, color: '#D97706', icon: 'eye', title: missing.length + ' çalışan görülmedi', desc: missing.map(cap).join(', ') });
         names.forEach(function (n) {
           var role = roleOf(n), rate = activeRate(data[n], role);
-          if (rate != null && rate < 40) items.push({ color: '#C03050', icon: 'down', title: cap(n) + ' · düşük aktiflik', desc: '%' + rate + ' (' + ROLE_LABEL[role] + ') — gün içinde az hareket görüldü.' });
+          if (rate != null && rate < 40) items.push({ id: 'low:' + date + ':' + n, color: '#C03050', icon: 'down', title: cap(n) + ' · düşük aktiflik', desc: '%' + rate + ' (' + ROLE_LABEL[role] + ') — gün içinde az hareket görüldü.' });
         });
       } else if (!names.length) {
-        items.push({ color: '#C03050', icon: 'warn', title: 'Veri yok', desc: 'Son 14 günde analiz kaydı bulunamadı.' });
+        items.push({ id: 'nodata', color: '#C03050', icon: 'warn', title: 'Veri yok', desc: 'Son 14 günde analiz kaydı bulunamadı.' });
       }
       NOTIFS = items;
       render();
@@ -153,8 +161,7 @@
       e.stopPropagation();
       var open = !(panel.style.display === 'none' || !panel.style.display);
       panel.style.display = open ? 'none' : 'block';
-      var dot = btn.querySelector('.notif-dot');
-      if (!open && dot) dot.style.display = 'none';   // açınca "okundu" say
+      if (!open) { markAllSeen(); render(); }   // panel açıldı -> hepsini "okundu" işaretle, nokta sönsün
     });
     document.addEventListener('click', function (e) { if (!wrap.contains(e.target)) panel.style.display = 'none'; });
 
