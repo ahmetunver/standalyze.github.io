@@ -28,8 +28,11 @@
     var workerRoles = {};
 
     async function authHeader() {
-      try { var t = window.Auth && (await Auth.idToken()); return t ? { Authorization: 'Bearer ' + t } : {}; }
-      catch (e) { return {}; }
+      try {
+        if (typeof Auth === 'undefined' || !Auth.idToken) return {};
+        var t = await Auth.idToken();
+        return t ? { Authorization: 'Bearer ' + t } : {};
+      } catch (e) { return {}; }
     }
     function ymd(d) {
       var y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), da = String(d.getDate()).padStart(2, '0');
